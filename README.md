@@ -17,6 +17,8 @@ The page is a single self-contained HTML file (`index.html`) with no build tooli
 - **Threats:** salvos of 1, 5, 10 or 20 from North Korea, Iran, China or Russia launch sites; ballistic RVs (boost, midcourse, re-entry) and HGVs (boost, 35–70 km glide with cross-range maneuver, terminal dive).
 - **Custody:** each threat is tagged stereo (two SVs, ≥15° separation), mono (one SV) or gap (none), with per-threat custody bars over the whole flight and a salvo-level stereo-custody percentage.
 - **IR band tasking:** each tasked SV shows the band it collects in (SWIR, MWIR or LWIR) on the globe, in the focus card and in the threat list. The simulated feed chooses band and geometry together; the summary reports *IR band fit* against SVs left on their default bands.
+- **Why this pick:** for the focused threat, the simulated feed explains its choice in plain language (band, background, stereo angle, dwell, handover avoidance), shows how much geometry, dwell, band fit, fire-control and continuity each contributed, names the runner-up pair and its margin, and rates confidence.
+- **Event-driven retasking:** an event feed over the globe logs launches, phase changes (burnout, pull-up, re-entry, terminal dive), HGV cross-range maneuvers, custody loss and regain, and every retask with its cause. Rings pulse on the globe as events fire. **Knock out** the current custody SV to simulate a failure and watch CS2C retask; the outage is not foreseen. Restore it from the Custody selection section.
 - **Selection source:** *Simulated* (default placeholder feed) or *CS2C* (picks loaded from model output). A dashed ring marks the baseline geometry rule's pick wherever it differs.
 
 ## Controls
@@ -40,7 +42,8 @@ Choose **CS2C** under *Custody selection* and load a JSON file in this shape:
   "model": "CS2C v0.1",
   "selections": [
     { "t": 120, "target": "B-01", "primary": "T2-0304", "primaryBand": "LWIR",
-      "partner": "E1-0102", "partnerBand": "MWIR" },
+      "partner": "E1-0102", "partnerBand": "MWIR",
+      "reason": "LWIR on cold RV vs space; 104° stereo" },
     { "t": 130, "target": "Sohae", "primary": "T1-0205", "partner": null }
   ]
 }
@@ -50,6 +53,7 @@ Choose **CS2C** under *Custody selection* and load a JSON file in this shape:
 - `target`: a threat ID (`B-01`, `H-03`) or a launch-site name.
 - `primary` / `partner`: SV IDs as labeled on the globe (`T1-0101`, `T2-0304`, `E1-0102`, `GEO-1`, `NGP-2`). `partner` may be `null`.
 - `primaryBand` / `partnerBand`: optional, `SWIR`, `MWIR` or `LWIR`. When present, the page shows CS2C's band choice.
+- `reason`: optional short text; shown as the CS2C rationale in the focus card.
 - Each pick holds until the next one for the same target.
 
 For a live integration, call `window.CS2C.load(data)` with the same object; `window.CS2C.clear()` resets it. Picks that reference an SV that can't see the target are flagged "not in view"; unknown SV IDs are listed in the file status.

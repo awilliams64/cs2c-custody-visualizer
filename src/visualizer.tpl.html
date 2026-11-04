@@ -69,6 +69,29 @@ button{font:inherit;color:inherit}
 .src code{font-family:var(--f-mono);font-size:10px}
 .kv .src-tag{font-family:var(--f-mono);font-size:10px;color:var(--muted)}
 .kv .warn{color:var(--bad)}
+.why{border-top:1px solid var(--line);padding-top:8px;display:flex;flex-direction:column;gap:6px}
+.why-h{font-size:11px;font-weight:600;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.conf{margin-left:auto;font-size:10px;font-weight:600;padding:1px 6px;border-radius:999px;border:1px solid}
+.conf.c-High{color:var(--ok);border-color:var(--ok)}.conf.c-Medium{color:var(--gold-ink);border-color:var(--gold)}.conf.c-Low{color:var(--bad);border-color:var(--bad)}
+.why-text{margin:0;font-size:11.5px;line-height:1.45}
+.why-bars{display:grid;grid-template-columns:auto 1fr;gap:3px 8px;align-items:center;font-size:10.5px;color:var(--muted)}
+.why-bars i{display:block;height:5px;border-radius:3px;background:var(--line);overflow:hidden}
+.why-bars b{display:block;height:100%;background:var(--gold)}.why-bars b.st{background:var(--blue)}
+.why-alt{margin:0;font-size:10.5px;color:var(--muted)}
+.kill{align-self:flex-start;font-size:11px;font-weight:600;border:1px solid var(--bad);color:var(--bad);background:transparent;border-radius:6px;padding:4px 9px;cursor:pointer}
+.kill:hover{background:color-mix(in srgb,var(--bad) 10%,transparent)}
+.linkbtn{border:0;background:none;padding:0;color:var(--blue);cursor:pointer;font-size:inherit;text-decoration:underline}
+.out-line{color:var(--bad)}
+.feed{position:absolute;top:12px;left:50%;transform:translateX(-50%);width:min(460px,calc(100% - 760px));display:flex;flex-direction:column;gap:4px;z-index:2;pointer-events:none}
+.ev,.ev-empty{pointer-events:auto;display:grid;grid-template-columns:auto auto 1fr;gap:8px;align-items:center;text-align:left;width:100%;
+  background:color-mix(in srgb,var(--panel) 88%,transparent);border:1px solid var(--line);border-left:3px solid var(--line);border-radius:7px;padding:5px 9px;font-size:11.5px;cursor:pointer;backdrop-filter:blur(6px);opacity:.72}
+.ev-empty{display:block;color:var(--muted);cursor:default}
+.ev.fresh{opacity:1;box-shadow:var(--shadow)}
+.ev-t{font-family:var(--f-mono);font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.ev-x{min-width:0}
+.ev-launch{border-left-color:var(--plume)}.ev-task,.ev-retask{border-left-color:var(--gold)}.ev-retask-out,.ev-gap{border-left-color:var(--bad)}
+.ev-phase{border-left-color:var(--blue)}.ev-maneuver{border-left-color:var(--hgv)}.ev-regain{border-left-color:var(--ok)}.ev-impact{border-left-color:var(--muted)}
+@media (max-width:1180px) and (min-width:861px){.feed{display:none}}
 .band{display:inline-block;font-family:var(--f-mono);font-size:9.5px;font-weight:600;letter-spacing:.03em;padding:0 5px;border-radius:3px;color:#fff;line-height:15px;vertical-align:1px}
 .band.SWIR{background:var(--swir)}.band.MWIR{background:var(--mwir)}.band.LWIR{background:var(--lwir)}
 .band.none{background:var(--line);color:var(--muted)}
@@ -153,6 +176,8 @@ details.sec:not([open]){gap:0}
 .empty{font-size:11.5px;color:var(--muted);padding:4px 6px}
 @media (max-width:860px){
   .tools{flex-wrap:wrap;justify-content:flex-end;left:10px}
+  .feed{position:absolute;top:8px;left:8px;right:8px;transform:none;width:auto}
+  .feed .ev:nth-child(n+3){display:none}
   html,body{height:auto}
   body{overflow:auto}
   body{padding-top:calc(var(--bh) + env(safe-area-inset-top,0px));padding-bottom:calc(var(--bh) + env(safe-area-inset-bottom,0px))}
@@ -170,6 +195,7 @@ details.sec:not([open]){gap:0}
 <div class="stage">
   <canvas id="world" aria-hidden="true"></canvas>
   <canvas id="globe" aria-label="Globe showing sensor satellites, launch sites and threat trajectories"></canvas>
+  <div class="feed" id="feed" aria-live="polite"></div>
   <div class="tools">
     <div class="seg" id="pivot" title="What the camera orbits around"><button data-v="earth" aria-pressed="true">Orbit Earth</button><button data-v="focus" aria-pressed="false">Orbit focus</button></div>
     <button id="north" class="wide" title="Level the horizon with north up">N↑</button>
@@ -237,6 +263,7 @@ details.sec:not([open]){gap:0}
     <summary>Custody selection</summary>
     <div class="seg" id="srcSeg"><button data-v="sim" aria-pressed="true">Simulated</button><button data-v="file" aria-pressed="false">CS2C</button></div>
     <p class="arch-note" id="srcNote"></p>
+    <p class="arch-note out-line" id="outLine" hidden><span id="outN"></span> · <button class="linkbtn" id="clearOut">Restore</button></p>
     <div id="fileBox" class="filebox" hidden>
       <label class="filebtn" for="modelFile">Load CS2C output (.json)</label>
       <input type="file" id="modelFile" accept=".json,application/json">
@@ -247,12 +274,13 @@ details.sec:not([open]){gap:0}
   "selections": [
     { "t": 120, "target": "B-01",
       "primary": "T2-0304", "primaryBand": "LWIR",
-      "partner": "E1-0102", "partnerBand": "MWIR" },
+      "partner": "E1-0102", "partnerBand": "MWIR",
+      "reason": "LWIR on cold RV vs space; 104° stereo" },
     { "t": 130, "target": "Sohae",
       "primary": "T1-0205", "partner": null }
   ]
 }</pre>
-        <p class="arch-note">t is seconds from scenario start (T+). target is a threat ID or launch-site name. SV IDs match the globe labels (T1-0101, E1-0102, GEO-1, NGP-2). primaryBand and partnerBand (SWIR, MWIR or LWIR) are optional. Each pick holds until the next one for that target. A live integration can call <code>window.CS2C.load(data)</code> with the same object.</p>
+        <p class="arch-note">t is seconds from scenario start (T+). target is a threat ID or launch-site name. SV IDs match the globe labels (T1-0101, E1-0102, GEO-1, NGP-2). primaryBand and partnerBand (SWIR, MWIR or LWIR) and a short reason string are optional. Each pick holds until the next one for that target. A live integration can call <code>window.CS2C.load(data)</code> with the same object.</p>
         <button class="copy" id="copySchema">Copy example</button>
       </details>
     </div>
@@ -504,7 +532,8 @@ function precompute(){
     THREATS.forEach((th,j)=>{const ts=threatState(th,t);THR_REC[j][k]=ts?{vis:scan(ts.p,phaseClass(ts.phase)),phase:ts.phase}:null;});
   }
   [...SITE_REC,...THR_REC].forEach(selectGeometry);
-  saveBaseline();applySource();
+  [...SITE_REC,...THR_REC].forEach(rec=>rec.forEach(r=>{if(r)r.vis0=r.vis;}));
+  OUTAGES=[];saveBaseline();applySource();
 }
 function computeStats(){
   STATS=[];let act=0,st2=0,sumV=0,agree=0,fit=0,fit0=0,nfit=0;
@@ -534,18 +563,66 @@ function setPick(r,bi,pi,pid,qid){
 }
 // placeholder "smart" picker: optimizes the stereo pair jointly, favors fire-control SVs on glide targets, penalizes handovers
 function simPicks(rec){let pb=-1,pp=-1;
-  rec.forEach(r=>{if(!r)return;const V=r.vis;if(!V.length){r.sim=[-1,-1];pb=pp=-1;return;}
+  rec.forEach(r=>{if(!r)return;const V=r.vis;r.why=null;if(!V.length){r.sim=[-1,-1];pb=pp=-1;return;}
     const glide=r.phase==='glide'||r.phase==='terminal';
-    const qq=v=>(v.q||0)+0.3*(v.bs||0)+(glide&&SATS[v.s].layer==='FC'?0.1:0)+(v.s===pb||v.s===pp?0.12:0);
-    let best=-1,bi=-1,bj=-1;
+    const parts=v=>({geo:v.qg||0,dwell:v.qd||0,band:0.3*(v.bs||0),fc:glide&&SATS[v.s].layer==='FC'?0.1:0,cont:(v.s===pb||v.s===pp)?0.2:0});
+    const qq=v=>{const p=parts(v);return p.geo+p.dwell+p.band+p.fc+p.cont;};
+    let best=-1,second=-1,bi=-1,bj=-1,si=-1,sj=-1;
     for(let i=0;i<V.length;i++)for(let j=i+1;j<V.length;j++){const a=V[i],b=V[j];
       const th=Math.acos(Math.max(-1,Math.min(1,a.lx*b.lx+a.ly*b.ly+a.lz*b.lz)));if(th<15*D2R)continue;
-      const sc=Math.sin(th)*(qq(a)+qq(b))/2;if(sc>best){best=sc;bi=i;bj=j;}}
-    if(bi<0){let m=-1;V.forEach((v,i)=>{if(qq(v)>m){m=qq(v);bi=i;}});r.sim=[V[bi].s,-1];}
-    else{let a=V[bi],b=V[bj];if(qq(b)>qq(a))[a,b]=[b,a];r.sim=[a.s,b.s];}
+      const sc=Math.sin(th)*(qq(a)+qq(b))/2;
+      if(sc>best){second=best;si=bi;sj=bj;best=sc;bi=i;bj=j;}else if(sc>second){second=sc;si=i;sj=j;}}
+    if(bi<0){const order=V.map((v,i)=>[qq(v),i]).sort((x,y)=>y[0]-x[0]);bi=order[0][1];
+      r.sim=[V[bi].s,-1];r.why={p:parts(V[bi]),q:null,th:0,score:order[0][0],second:order[1]?order[1][0]:0,alt:order[1]?[V[order[1][1]].s,-1]:null,mono:true};}
+    else{let a=V[bi],b=V[bj];if(qq(b)>qq(a))[a,b]=[b,a];r.sim=[a.s,b.s];
+      const th=Math.acos(Math.max(-1,Math.min(1,a.lx*b.lx+a.ly*b.ly+a.lz*b.lz)));
+      r.why={p:parts(a),q:parts(b),th,score:best,second:Math.max(0,second),alt:si>=0?[V[si].s,V[sj].s]:null,mono:false};}
     pb=r.sim[0];pp=r.sim[1];});}
 function lookupPick(arr,t){if(!arr||!arr.length||arr[0].t>t)return null;let lo=0,hi=arr.length-1;
   while(lo<hi){const m=(lo+hi+1)>>1;if(arr[m].t<=t)lo=m;else hi=m-1;}return arr[lo];}
+/* ---------- outages (injected SV failures) ---------- */
+let OUTAGES=[];
+const isOut=(s,t)=>OUTAGES.some(o=>o.s===s&&t>=o.t);
+function recomputeSelection(){
+  [...SITE_REC,...THR_REC].forEach(rec=>rec.forEach((r,k)=>{if(!r)return;const t=k*DT;r.vis=OUTAGES.length?r.vis0.filter(v=>!isOut(v.s,t)):r.vis0;}));
+  [...SITE_REC,...THR_REC].forEach(selectGeometry);saveBaseline();applySource();refreshSummary();lastUI=0;}
+function knockOut(s){if(s<0||OUTAGES.some(o=>o.s===s))return;const t=Math.ceil(S.t/DT)*DT;OUTAGES.push({s,t});
+  EVENTS_FIRED.add('out'+s);pulses.push({kind:'out',s,start:performance.now()});recomputeSelection();}
+
+/* ---------- event-driven retasking feed ---------- */
+let EVENTS=[];const EVENTS_FIRED=new Set();let pulses=[];
+function hgvLatRate(th,t){if(th.type!=='H')return 0;const tau=(t-th.tL)/th.TOF,tb=th.tb/th.TOF;if(tau<=tb||tau>=1)return 0;
+  const u=(tau-tb)/(1-tb),f=x=>th.A*Math.sin(Math.PI*x)+th.A2*0.35*Math.abs(th.A)*Math.sin(3*Math.PI*x)*x;return f(Math.min(1,u+0.002))-f(u);}
+const PHASE_EVT={mid:'Burnout · RV in midcourse',reentry:'Re-entry heating begins',glide:'Pull-up · glide phase',terminal:'Terminal dive'};
+function buildEvents(){
+  EVENTS=[];
+  THREATS.forEach((th,j)=>{let prev=null,lastMan=-1e9;
+    THR_REC[j].forEach((r,k)=>{const t=k*DT;
+      if(!r){if(prev){EVENTS.push({t,j,kind:'impact',text:`Impact near ${th.target}`});prev=null;}return;}
+      const id=x=>x>=0?SATS[x].id:'—',bandTxt=b=>b?` ${b}`:'';
+      const tasking=()=>r.best>=0?`${id(r.best)}${bandTxt(r.bandP)}${r.partner>=0?` + ${id(r.partner)}${bandTxt(r.bandQ)}`:' (mono)'}`:'no SV available';
+      if(!prev){EVENTS.push({t,j,kind:'launch',text:`Launch detected from ${th.siteName} · ${r.vis.length} SVs in view`});
+        EVENTS.push({t:t+0.1,j,kind:'task',sv:r.best,text:`CS2C tasks ${tasking()}`});prev={...r};return;}
+      let cause=null;
+      if(r.phase!==prev.phase&&PHASE_EVT[r.phase]){EVENTS.push({t,j,kind:'phase',text:PHASE_EVT[r.phase]});cause='phase change';}
+      const lr0=hgvLatRate(th,t-DT),lr1=hgvLatRate(th,t);
+      if(lr0&&lr1&&Math.sign(lr0)!==Math.sign(lr1)&&t-lastMan>60){EVENTS.push({t,j,kind:'maneuver',text:'Cross-range maneuver detected'});lastMan=t;}
+      const setNow=[r.best,r.partner].sort().join(),setPrev=[prev.best,prev.partner].sort().join();
+      const bandsNow=[r.best+':'+r.bandP,r.partner+':'+r.bandQ].sort().join(),bandsPrev=[prev.best+':'+prev.bandP,prev.partner+':'+prev.bandQ].sort().join();
+      if(setNow!==setPrev||bandsNow!==bandsPrev){
+        const outHit=[prev.best,prev.partner].find(s=>s>=0&&isOut(s,t)&&!isOut(s,t-DT));
+        const left=[prev.best,prev.partner].find(s=>s>=0&&!r.vis.some(v=>v.s===s)&&!isOut(s,t));
+        let why=outHit!==undefined?`${id(outHit)} outage`:left!==undefined?`${id(left)} leaving view`:cause?cause:t-lastMan<=40?'re-acquire after maneuver':
+          r.best===prev.best&&r.partner===prev.partner?'better band fit':r.status===2&&prev.status!==2?'stereo pair available':'better geometry';
+        EVENTS.push({t,j,kind:outHit!==undefined?'retask-out':'retask',sv:r.best,text:`Retask → ${tasking()} · ${why}`});}
+      if(r.status===0&&prev.status!==0)EVENTS.push({t,j,kind:'gap',text:'Custody lost · no SV can see it'});
+      if(r.status!==0&&prev.status===0)EVENTS.push({t,j,kind:'regain',text:'Custody regained'});
+      prev={...r};});});
+  EVENTS.sort((a,b)=>a.t-b.t);
+}
+function fireEvents(t0,t1){if(t1<t0||t1-t0>DT*3)return; // only on forward playback, not big scrubs
+  EVENTS.forEach((e,i)=>{if(e.t>t0&&e.t<=t1){if(e.sv>=0&&(e.kind==='task'||e.kind.startsWith('retask')))pulses.push({kind:'sv',s:e.sv,start:performance.now()});
+    pulses.push({kind:e.kind,j:e.j,start:performance.now()});}});}
 function fixedBands(r){r.bandP=r.bestV?r.bestV.band0:null;r.bandQ=r.partnerV?r.partnerV.band0:null;r.bandMode='fixed';}
 function applySource(){
   const idMap=new Map(SATS.map((s,i)=>[s.id,i]));
@@ -559,9 +636,9 @@ function applySource(){
       const p=lookupPick(arr,k*DT);
       if(!p){Object.assign(r,r.b);r.picked='none';r.pickInView=true;r.partnerInView=true;r.pickId=r.partnerId=null;fixedBands(r);return;}
       const bi=p.primary?(idMap.has(p.primary)?idMap.get(p.primary):-2):-1,pi=p.partner?(idMap.has(p.partner)?idMap.get(p.partner):-2):-1;
-      setPick(r,bi,pi,p.primary,p.partner);r.picked='file';r.bandP=p.primaryBand;r.bandQ=p.partnerBand;r.bandMode='model';});
+      setPick(r,bi,pi,p.primary,p.partner);r.picked='file';r.bandP=p.primaryBand;r.bandQ=p.partnerBand;r.bandMode='model';r.reason=p.reason;r.why=null;});
   });
-  computeStats();
+  computeStats();buildEvents();
 }
 function loadModel(obj,fallbackName){
   if(!obj||!Array.isArray(obj.selections))throw new Error('The file needs a "selections" array.');
@@ -569,7 +646,7 @@ function loadModel(obj,fallbackName){
   obj.selections.forEach(e=>{if(!e||typeof e.t!=='number'||!e.target){bad++;return;}
     const k=String(e.target).toLowerCase();if(!byKey.has(k))byKey.set(k,[]);
     const nb=b=>{const u=b?String(b).toUpperCase():null;return BANDS.includes(u)?u:null;};
-    byKey.get(k).push({t:e.t,primary:e.primary?String(e.primary):null,partner:e.partner?String(e.partner):null,primaryBand:nb(e.primaryBand),partnerBand:nb(e.partnerBand)});n++;});
+    byKey.get(k).push({t:e.t,primary:e.primary?String(e.primary):null,partner:e.partner?String(e.partner):null,primaryBand:nb(e.primaryBand),partnerBand:nb(e.partnerBand),reason:e.reason?String(e.reason).slice(0,240):null});n++;});
   byKey.forEach(a=>a.sort((x,y)=>x.t-y.t));
   MODEL.file={name:obj.model||fallbackName||'CS2C output',byKey,n,bad};
   setSource('file');
@@ -587,19 +664,22 @@ function setSource(src){MODEL.src=src;[...$('#srcSeg').children].forEach(c=>c.se
     file:'Shows the custody picks from a CS2C output file. A dashed ring marks the baseline pick wherever the two differ.'}[src];
   $('#fileStatus').innerHTML=fileStatusText();
   if(SITE_REC.length){applySource();refreshSummary();lastUI=0;}}
+window.__events=()=>EVENTS;
 window.CS2C={load:obj=>loadModel(obj,'CS2C (API)'),clear:()=>{MODEL.file=null;setSource('base');}};
 
 function selectGeometry(rec){
   // dwell: consecutive future steps each SV keeps access
-  let next=new Map();
+  // computed once from the full access lists, so an injected outage comes as a surprise (no foresight)
+  if(!rec._dw){let next=new Map();
   for(let k=rec.length-1;k>=0;k--){const r=rec[k];const cur=new Map();
     if(r)r.vis.forEach(v=>{v.dw=((next.get(v.s)||0)+1)*DT;cur.set(v.s,v.dw/DT);});next=cur;}
+  rec._dw=true;}
   let pb=-1,pp=-1;
   for(let k=0;k<rec.length;k++){const r=rec[k];if(!r){pb=pp=-1;continue;}
     const V=r.vis;
     if(!V.length){r.best=r.partner=-1;r.status=0;r.theta=0;pb=pp=-1;continue;}
     let mq=-1,bi=-1;
-    V.forEach((v,i)=>{v.q=0.40*Math.max(0,v.rf)+0.25*Math.max(0,Math.min(1,(v.se+0.2)/1.2))+0.35*Math.min(v.dw,300)/300;if(v.q>mq){mq=v.q;bi=i;}});
+    V.forEach((v,i)=>{v.qg=0.40*Math.max(0,v.rf)+0.25*Math.max(0,Math.min(1,(v.se+0.2)/1.2));v.qd=0.35*Math.min(v.dw,300)/300;v.q=v.qg+v.qd;if(v.q>mq){mq=v.q;bi=i;}});
     const keep=V.findIndex(v=>v.s===pb);if(keep>=0&&V[keep].q>=0.85*mq)bi=keep;
     const B=V[bi];let ms=-1,pi=-1,th=0;const sc=[];
     V.forEach((v,i)=>{if(i===bi)return;const c=Math.max(-1,Math.min(1,B.lx*v.lx+B.ly*v.ly+B.lz*v.lz)),a=Math.acos(c);
@@ -744,6 +824,10 @@ function frame(){
     g.beginPath();if(SATS[i].layer==='FC')g.rect(p[0]-r,p[1]-r,r*2,r*2);else g.arc(p[0],p[1],r,0,Math.PI*2);g.fillStyle=col;g.fill();
     if(bestAny.has(i)){g.lineWidth=1.2;g.strokeStyle=C.ink;g.stroke();}
     g.globalAlpha=1;}
+  // outaged SVs
+  OUTAGES.forEach(o=>{if(t<o.t)return;const p=satScr[o.s];if(!p||p[3])return;g.strokeStyle=C.bad;g.lineWidth=2;
+    g.beginPath();g.moveTo(p[0]-5,p[1]-5);g.lineTo(p[0]+5,p[1]+5);g.moveTo(p[0]+5,p[1]-5);g.lineTo(p[0]-5,p[1]+5);g.stroke();
+    label(g,`${SATS[o.s].id} OUT`,p[0]+8,p[1]-6,C.bad,9.5,true);});
   // launch sites
   SITES.forEach((s,j)=>{proj(s.p[0],s.p[1],s.p[2],P);if(P[3])return;
     const foc=!S.autoFocus&&S.focus&&S.focus.kind==='site'&&S.focus.i===j;
@@ -798,6 +882,13 @@ function frame(){
     else{g.fillStyle=C.globe;g.fill();g.lineWidth=2.2;g.strokeStyle=C.blue;g.stroke();g.beginPath();g.arc(p[0],p[1],2,0,Math.PI*2);g.fillStyle=C.blue;g.fill();}
     const s=SATS[i],txt=`${s.id}${p.off?' ↗':''}`;label(g,txt,p[0]+9,p[1]+4,kind==='b'?C['gold-ink']:C.blue,11,true);
     const band=kind==='b'?rec.bandP:rec.bandQ;if(band)bandChip(g,band,p[0]+13+g.measureText(txt).width,p[1]+4);});}
+  // event pulses (expanding rings)
+  const nowP=performance.now();pulses=pulses.filter(pl=>nowP-pl.start<1400);
+  pulses.forEach(pl=>{const f=(nowP-pl.start)/1400;let x,y,col;
+    if(pl.kind==='sv'||pl.kind==='out'){const p=edgeClamp(satScr[pl.s]);if(!p)return;x=p[0];y=p[1];col=pl.kind==='out'?C.bad:C.gold;}
+    else{const st=threatState(THREATS[pl.j],t);if(!st)return;proj(st.p[0],st.p[1],st.p[2],P);if(P[3])return;x=P[0];y=P[1];
+      col={launch:C.plume,phase:C.blue,maneuver:C.hgv,gap:C.bad,regain:C.ok,impact:C.muted}[pl.kind]||C.gold;}
+    g.globalAlpha=1-f;g.strokeStyle=col;g.lineWidth=2.5*(1-f)+0.5;g.beginPath();g.arc(x,y,6+f*28,0,Math.PI*2);g.stroke();g.globalAlpha=1;});
   updateUI(k);
 }
 function edgeClamp(p,mark){if(!p||p[3])return null;const m=14;
@@ -843,10 +934,16 @@ function updateUI(k){
         <dt>Band tasking</dt><dd>${{fixed:'fixed default',opt:'optimized',model:'CS2C'}[r.bandMode]||'—'}${r.bandMode!=='fixed'&&B&&r.bandP&&r.bandP!==B.band0?` <span class="src-tag">default ${B.band0}</span>`:''}</dd>`:''}
         <dt>Stereo angle</dt><dd>${r.status===2?Math.round(r.theta*R2D)+'°':r.status===1?'mono · no range':'—'}</dd>
       </dl>
-      <div class="qbar" title="Geometry score of the custody pick"><i style="width:${B?Math.round(B.q*100):0}%"></i></div>`;
+      ${r.why&&r.picked==='sim'&&isT?whyHtml(r,st):r.picked==='file'&&r.reason?`<div class="why"><div class="why-h">CS2C rationale</div><p class="why-text">${esc(r.reason)}</p></div>`:`<div class="qbar" title="Geometry score of the custody pick"><i style="width:${B?Math.round(B.q*100):0}%"></i></div>`}
+      ${isT&&r.best>=0?`<button class="kill" data-kill="${r.best}" title="Simulate a failure of this SV from now on and watch CS2C retask">Knock out ${SATS[r.best].id}</button>`:''}`;
     }
   }else html='<div class="empty">Select a launch site or threat on the globe.</div>';
   $('#focus').innerHTML=html;
+  // event feed: latest events up to now
+  const fj=S.focus&&S.focus.kind==='threat'&&!S.autoFocus?S.focus.i:-1;
+  const evs=[];for(let i=EVENTS.length-1;i>=0&&evs.length<5;i--)if(EVENTS[i].t<=S.t&&(fj<0||EVENTS[i].j===fj))evs.push(EVENTS[i]);
+  $('#feed').innerHTML=evs.length?evs.map((e,n)=>{const th=THREATS[e.j];return`<button class="ev ev-${e.kind}${S.t-e.t<45?' fresh':''}" data-j="${e.j}"><span class="ev-t">T+${fmtT(e.t)}</span><span class="chip ${th.type}">${th.id}</span><span class="ev-x">${esc(e.text)}</span></button>`;}).join(''):'<div class="ev-empty">Launch watch · CS2C events appear here</div>';
+  $('#outLine').hidden=!OUTAGES.length;$('#outN').textContent=OUTAGES.length?`${OUTAGES.length} SV${OUTAGES.length>1?'s':''} knocked out (${OUTAGES.map(o=>SATS[o.s]?SATS[o.s].id:'?').join(', ')})`:'';
   // rows
   SITES.forEach((s,j)=>{const rr=SITE_REC[j][k],el=document.getElementById('site-'+j);if(!el)return;
     el.querySelector('.rt').innerHTML=`${s.name} <small>${rr.vis.length} SVs · ${rr.best>=0?SATS[rr.best].id:'none'}</small>`;
@@ -857,6 +954,22 @@ function updateUI(k){
     el.setAttribute('aria-pressed',f&&f.kind==='threat'&&f.i===j);});
   drawChartCursor();drawStrips();
 }
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function rationale(r,st){const w=r.why,B=r.bestV;if(!B)return'';const pc=phaseClass(st?st.phase:'watch'),b=r.bandP;const out=[];
+  out.push(pc==='boost'?`${b} on the boost plume`:pc==='mid'?(B.bth?`${b} against an Earth background`:`${b} on a cold RV against space`):pc==='reentry'?`${b} on re-entry heating`:`${b} on the glide body's heating`+(B.bth?' against Earth':' against space'));
+  out.push(w.mono?'mono only: no partner gives 15°+ separation':`${Math.round(w.th*R2D)}° stereo with ${SATS[r.partner].id}${r.bandQ?' ('+r.bandQ+')':''}`);
+  out.push(`${B.dw>=600?'10+ min':fmtDur(B.dw)} of access left`);
+  if(w.p.fc>0)out.push('fire-control sensor for the glide target');
+  if(w.p.cont>0)out.push('kept on track to avoid a handover');
+  return out.join(' · ');}
+function whyHtml(r,st){const w=r.why,rows=[['Geometry',w.p.geo,.65],['Dwell',w.p.dwell,.35],['IR band fit',w.p.band,.3],['Fire-control',w.p.fc,.1],['Continuity',w.p.cont,.2]];
+  const margin=w.score>0?(w.score-w.second)/w.score:0,conf=w.alt?(margin>.15?'High':margin>.05?'Medium':'Low'):'High';
+  const altTxt=w.alt?`${SATS[w.alt[0]].id}${w.alt[1]>=0?' + '+SATS[w.alt[1]].id:''} scored ${Math.round(margin*100)}% lower`:'no alternative in view';
+  return `<div class="why"><div class="why-h">Why CS2C chose this <span class="src-tag">simulated</span><span class="conf c-${conf}">${conf} confidence</span></div>
+    <p class="why-text">${rationale(r,st)}</p>
+    <div class="why-bars">${rows.map(([n,v,m])=>`<span>${n}</span><i><b style="width:${Math.round(Math.min(1,v/m)*100)}%"></b></i>`).join('')}
+    ${w.mono?'':`<span>Stereo angle</span><i><b class="st" style="width:${Math.round(Math.sin(w.th)*100)}%"></b></i>`}</div>
+    <p class="why-alt">Runner-up: ${altTxt}</p></div>`;}
 const bandHtml=b=>b?`<span class="band ${b}">${b}</span>`:'<span class="band none">—</span>';
 function layerMix(vis){const c={};vis.forEach(v=>{const l={LEO:'WFOV',FC:'FC',MEO:'MEO',GEO:'GEO',HEO:'Polar'}[SATS[v.s].layer];c[l]=(c[l]||0)+1;});return Object.keys(c).length?`<span style="color:var(--muted)">(${Object.entries(c).map(([l,n])=>l+' '+n).join(', ')})</span>`:'';}
 function buildLists(){
@@ -997,11 +1110,16 @@ window.addEventListener('resize',()=>{resize();drawChart();});
 /* ---------- loop ---------- */
 let last=performance.now(),perfAcc=0,perfN=0;
 function loop(now){const dt=Math.min(0.1,(now-last)/1000);last=now;
+  const tPrev=S.t;
   if(S.playing){S.t+=dt*S.speed;if(S.t>=DUR){if(S.loop){S.t=0;S.autoFocus=true;S.focus={kind:'site',i:0};lastUI=0;}else{S.t=DUR;S.playing=false;setPP();}}}
+  fireEvents(tPrev,S.t);
   // drop canvas resolution if this machine can't keep up
   perfAcc+=dt;perfN++;if(perfAcc>1.5){if(perfAcc/perfN>0.045&&DPRMAX>1){DPRMAX=1;resize();}perfAcc=0;perfN=0;}
   requestAnimationFrame(loop);
   try{frame();}catch(err){console.error(err);if(!S.cam.q.every(Number.isFinite)){const c=REGIONS[S.region].center;S.cam.q=qLook(c[0],c[1]);S.cam.T=[0,0,0];S.cam.vel=S.cam.qTarget=null;}}}
+$('#focus').addEventListener('click',e=>{const b=e.target.closest('[data-kill]');if(b){knockOut(+b.dataset.kill);}});
+$('#feed').addEventListener('click',e=>{const it=e.target.closest('[data-j]');if(it)setFocus({kind:'threat',i:+it.dataset.j});});
+$('#clearOut').onclick=()=>{OUTAGES=[];recomputeSelection();};
 $('#srcSeg').onclick=e=>{const b=e.target.closest('button');if(b)setSource(b.dataset.v);};
 $('#modelFile').onchange=e=>{const f=e.target.files&&e.target.files[0];if(!f)return;const rd=new FileReader();
   rd.onload=()=>{try{loadModel(JSON.parse(rd.result),f.name);}catch(err){$('#fileStatus').innerHTML=`<span style="color:var(--bad)">Couldn't read ${f.name}: ${err.message}</span>`;}};rd.readAsText(f);e.target.value='';};
