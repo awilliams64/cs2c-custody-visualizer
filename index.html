@@ -343,6 +343,7 @@ details.sec:not([open]){gap:0}
         <tr><td>GEO</td><td>LOS</td><td>—</td><td>—</td><td>—</td></tr>
         <tr><td>Polar</td><td>LOS</td><td>—</td><td>—</td><td>—</td></tr>
       </table>
+      <p><b>Shared fields of view</b> (notional half-angles): LEO WFOV 62° (whole Earth disk), LEO fire-control 8°, MEO 26°, GEO 9°, polar 10°. The simulated feed tasks every threat at once: an SV keeps custody of several threats when they all fit inside its field of view and call for the same IR band, which frees other SVs. Narrow fields of view are drawn as a dashed footprint for the focused threat's SVs; ×n on a label is how many threats that SV holds.</p>
       <p><b>Best collection geometry</b> is the highest score: 40% slant range, 25% elevation of the SV above the target's horizon, 35% remaining access time (dwell, capped at 5 min). The pick is held unless another SV beats it by 15%, to avoid needless handovers.</p>
       <p><b>IR band tasking</b> (notional). Each SV collects in one band at a time from the bands its layer carries. LEO WFOV: SWIR (default) or MWIR. LEO fire-control: MWIR (default) or LWIR. MEO, GEO, polar: SWIR (default) or MWIR. Band fit depends on flight phase and on whether the target sits against space (above the horizon) or Earth (below the horizon):</p>
       <table>
@@ -414,6 +415,8 @@ const ARCH={
 };
 // IR bands (notional). Each layer carries a default band (first) and any bands it can switch to.
 const BANDS=['SWIR','MWIR','LWIR'];
+// sensor field of view, half-angle in degrees (notional). WFOV LEO sees the whole Earth disk; fire-control is narrow.
+const FOV_HALF={LEO:62,FC:8,MEO:26,GEO:9,HEO:10};
 const LAYER_BANDS={LEO:['SWIR','MWIR'],FC:['MWIR','LWIR'],MEO:['SWIR','MWIR'],GEO:['SWIR','MWIR'],HEO:['SWIR','MWIR']};
 // band suitability 0..1 by flight phase and background (bth: target seen against Earth; else against space)
 function bandSuit(pc,band,bth){
@@ -563,7 +566,7 @@ function precompute(){
   OUTAGES=[];saveBaseline();applySource();
 }
 function computeStats(){
-  STATS=[];let act=0,st2=0,sumV=0,agree=0,fit=0,fit0=0,nfit=0;
+  STATS=[];let act=0,st2=0,sumV=0,agree=0,fit=0,fit0=0,nfit=0,tSv=0,tPk=0,tN=0;
   const gapRuns=THREATS.map(()=>({cur:0,max:0,any:false}));
   for(let k=0;k<NSTEP;k++){
     let mn=Infinity,mx=0,sm=0,n=0,c=[0,0,0];
@@ -572,9 +575,10 @@ function computeStats(){
       const pc=phaseClass(r.phase);if(r.bestV&&r.bandP&&r.b.bestV){fit+=bandSuit(pc,r.bandP,r.bestV.bth);fit0+=r.b.bestV.bs0;nfit++;}
       const g=gapRuns[j];if(r.status===0){g.cur+=DT;g.any=true;g.max=Math.max(g.max,g.cur);}else g.cur=0;});
     STATS.push(n?{n,min:mn,max:mx,avg:sm/n,c}:null);
+    if(n&&MODEL.src==='sim'&&STEP_TASK[k]){tSv+=STEP_TASK[k].svs;tPk+=STEP_TASK[k].picks;tN++;}
     act+=n;st2+=c[2];sumV+=sm;
   }
-  SUMMARY={stereo:act?st2/act:0,avgV:act?sumV/act:0,agree:act?agree/act:1,fit:nfit?fit/nfit:0,fit0:nfit?fit0/nfit:0,gapThreats:gapRuns.filter(g=>g.any).length,longest:Math.max(0,...gapRuns.map(g=>g.max)),maxV:Math.max(1,...STATS.filter(Boolean).map(s=>s.max))};
+  SUMMARY={stereo:act?st2/act:0,avgV:act?sumV/act:0,agree:act?agree/act:1,tasked:tN?tSv/tN:0,slots:tN?tPk/tN:0,fit:nfit?fit/nfit:0,fit0:nfit?fit0/nfit:0,gapThreats:gapRuns.filter(g=>g.any).length,longest:Math.max(0,...gapRuns.map(g=>g.max)),maxV:Math.max(1,...STATS.filter(Boolean).map(s=>s.max))};
 }
 
 /* ---------- custody selection source: baseline rule, simulated feed, or CS2C output ---------- */
@@ -620,6 +624,60 @@ function simPicks(rec){let pb=-1,pp=-1,holdK=0;
       r.sim=[v.s,-1];r.why={p:parts(v),q:null,th:0,score:qq(v),second:alt?alt[0]:0,alt:alt?[alt[1].s,-1]:null,mono:true,held:v!==order[0][1]};
     }
     pb=r.sim[0];pp=r.sim[1];});}
+// CS2C-style joint tasking: every threat is assigned at once, each SV holds one boresight, and an SV
+// can keep custody of several threats only if they all fit inside its field of view.
+let STEP_TASK=[];
+function simJoint(){
+  const st=THREATS.map(()=>({pb:-1,pp:-1,holdK:0}));
+  const order=THREATS.map((_,j)=>j).sort((a,b)=>THREATS[a].tL-THREATS[b].tL);
+  STEP_TASK=new Array(NSTEP);
+  const ang=(a,b)=>Math.acos(Math.max(-1,Math.min(1,a.lx*b.lx+a.ly*b.ly+a.lz*b.lz)));
+  for(let k=0;k<NSTEP;k++){
+    const asg=new Map();let picks=0;
+    // incumbents first, so a held pair is not squeezed out by a newer threat
+    const ord=order.slice().sort((a,b)=>(st[b].pb>=0)-(st[a].pb>=0));
+    ord.forEach(j=>{const r=THR_REC[j][k],s=st[j];
+      if(!r){s.pb=s.pp=-1;return;}
+      r.why=null;r.shareP=[];r.shareQ=[];
+      const fits=v=>{const L=asg.get(v.s);if(!L)return true;const half=FOV_HALF[SATS[v.s].layer]*D2R;
+        // one boresight and one band per SV: every target it holds must fit the FOV and want the same band
+        return L.every(o=>o.band===v.band&&Math.acos(Math.max(-1,Math.min(1,o.lx*v.lx+o.ly*v.ly+o.lz*v.lz)))<=2*half);};
+      const V=r.vis.filter(fits);
+      if(!V.length){r.sim=[-1,-1];s.pb=s.pp=-1;return;}
+      const glide=r.phase==='glide'||r.phase==='terminal';
+      const parts=v=>({geo:v.qg||0,dwell:v.qd||0,band:0.3*(v.bs||0),fc:glide&&SATS[v.s].layer==='FC'?0.1:0,cont:(v.s===s.pb||v.s===s.pp)?0.2:0,share:asg.has(v.s)?0.15:0});
+      const qq=v=>{const p=parts(v);return p.geo+p.dwell+p.band+p.fc+p.cont+p.share;};
+      const pairs=[];
+      for(let i=0;i<V.length;i++)for(let m=i+1;m<V.length;m++){const th=ang(V[i],V[m]);if(th<15*D2R)continue;pairs.push({a:V[i],b:V[m],th,sc:Math.sin(th)*(qq(V[i])+qq(V[m]))/2});}
+      pairs.sort((x,y)=>y.sc-x.sc);
+      if(pairs.length){
+        const cur=s.pb>=0&&s.pp>=0?pairs.find(c=>(c.a.s===s.pb&&c.b.s===s.pp)||(c.a.s===s.pp&&c.b.s===s.pb)):null;
+        const keepOne=!cur?pairs.find(c=>[c.a.s,c.b.s].some(x=>x>=0&&(x===s.pb||x===s.pp))):null;
+        let pick;
+        if(cur&&((k-s.holdK)*DT<HOLD_MIN||pairs[0].sc<cur.sc*SWITCH_GAIN))pick=cur;
+        else if(keepOne&&pairs[0].sc<keepOne.sc*SWITCH_GAIN){pick=keepOne;s.holdK=k;}
+        else{pick=pairs[0];if(pick!==cur)s.holdK=k;}
+        let a=pick.a,b=pick.b;if(b.s===s.pb||(a.s!==s.pb&&qq(b)>qq(a)))[a,b]=[b,a];
+        const alt=pairs.find(c=>c!==pick)||null;
+        r.sim=[a.s,b.s];r.why={p:parts(a),q:parts(b),th:pick.th,score:pick.sc,second:alt?alt.sc:0,alt:alt?[alt.a.s,alt.b.s]:null,mono:false,held:pick!==pairs[0]};
+        [a,b].forEach(v=>{if(!asg.has(v.s))asg.set(v.s,[]);asg.get(v.s).push({j,lx:v.lx,ly:v.ly,lz:v.lz,band:v.band});});picks+=2;
+      }else{
+        const order2=V.map(v=>[qq(v),v]).sort((x,y)=>y[0]-x[0]);let v=order2[0][1];const curV=V.find(x=>x.s===s.pb);
+        if(curV&&((k-s.holdK)*DT<HOLD_MIN||order2[0][0]<qq(curV)*SWITCH_GAIN))v=curV;else if(v.s!==s.pb)s.holdK=k;
+        const alt=order2.find(o=>o[1]!==v);
+        r.sim=[v.s,-1];r.why={p:parts(v),q:null,th:0,score:qq(v),second:alt?alt[0]:0,alt:alt?[alt[1].s,-1]:null,mono:true,held:v!==order2[0][1]};
+        if(!asg.has(v.s))asg.set(v.s,[]);asg.get(v.s).push({j,lx:v.lx,ly:v.ly,lz:v.lz,band:v.band});picks+=1;
+      }
+      s.pb=r.sim[0];s.pp=r.sim[1];});
+    // who shares each tasked SV, and where each SV points (boresight = mean target direction)
+    order.forEach(j=>{const r=THR_REC[j][k];if(!r||!r.sim)return;
+      const others=x=>x>=0?(asg.get(x)||[]).filter(o=>o.j!==j).map(o=>o.j):[];r.shareP=others(r.sim[0]);r.shareQ=others(r.sim[1]);
+      if(r.why){if(r.shareP.length)r.why.p.share=0.15;if(r.why.q&&r.shareQ.length)r.why.q.share=0.15;}
+      const bore=x=>{const L=asg.get(x);if(!L)return null;let sx=0,sy=0,sz=0;L.forEach(o=>{sx-=o.lx;sy-=o.ly;sz-=o.lz;});const n=Math.hypot(sx,sy,sz)||1;return[sx/n,sy/n,sz/n];};
+      r.boreP=bore(r.sim[0]);r.boreQ=r.sim[1]>=0?bore(r.sim[1]):null;});
+    STEP_TASK[k]={svs:asg.size,picks};
+  }
+}
 function lookupPick(arr,t){if(!arr||!arr.length||arr[0].t>t)return null;let lo=0,hi=arr.length-1;
   while(lo<hi){const m=(lo+hi+1)>>1;if(arr[m].t<=t)lo=m;else hi=m-1;}return arr[lo];}
 /* ---------- outages (injected SV failures) ---------- */
@@ -671,8 +729,8 @@ function fixedBands(r){r.bandP=r.bestV?r.bestV.band0:null;r.bandQ=r.partnerV?r.p
 function applySource(){
   const idMap=new Map(SATS.map((s,i)=>[s.id,i]));
   const recs=[...SITE_REC.map((r,j)=>[r,SITES[j].name]),...THR_REC.map((r,j)=>[r,THREATS[j].id])];
+  if(MODEL.src==='sim'){SITE_REC.forEach(simPicks);simJoint();}
   recs.forEach(([rec,key])=>{
-    if(MODEL.src==='sim')simPicks(rec);
     const arr=MODEL.src==='file'&&MODEL.file?MODEL.file.byKey.get(key.toLowerCase()):null;
     rec.forEach((r,k)=>{if(!r)return;
       if(MODEL.src==='base'){Object.assign(r,r.b);r.picked='base';r.pickInView=true;r.partnerInView=true;r.pickId=r.partnerId=null;fixedBands(r);return;}
@@ -920,11 +978,29 @@ function frame(){
   if(rec&&MODEL.src!=='base'&&rec.b&&rec.b.best>=0&&rec.b.best!==rec.best){const p=edgeClamp(satScr[rec.b.best]);
     if(p){g.setLineDash([3,3]);g.strokeStyle=C.ink;g.lineWidth=1.4;g.beginPath();g.arc(p[0],p[1],8,0,Math.PI*2);g.stroke();g.setLineDash([]);
       label(g,'baseline',p[0]+10,p[1]-6,C.muted,9.5);}}
+  // shared custody: thin lines from the focused threat's SVs to the other threats they hold, and narrow-FOV footprints
+  if(rec&&rec.picked==='sim'){
+    [[rec.best,rec.shareP,rec.boreP,C.gold],[rec.partner,rec.shareQ,rec.boreQ,C.blue]].forEach(([si,share,bore,col])=>{if(si<0)return;
+      const sp=edgeClamp(satScr[si]);
+      if(sp&&share&&share.length){g.strokeStyle=col;g.globalAlpha=0.5;g.lineWidth=1;g.setLineDash([2,4]);
+        share.forEach(j=>{const st=threatState(THREATS[j],t);if(!st)return;proj(st.p[0],st.p[1],st.p[2],P);if(P[3])return;g.beginPath();g.moveTo(sp[0],sp[1]);g.lineTo(P[0],P[1]);g.stroke();});
+        g.setLineDash([]);g.globalAlpha=1;}
+      const half=FOV_HALF[SATS[si].layer];if(!bore||half>=20)return;
+      const o=[satBuf[si*3],satBuf[si*3+1],satBuf[si*3+2]],h=half*D2R;
+      const u=unit(cross(bore,Math.abs(bore[2])<0.9?[0,0,1]:[1,0,0])),w2=cross(bore,u);
+      g.beginPath();let pen=false,cnt=0;
+      for(let a=0;a<=48;a++){const ph=a/48*Math.PI*2,c=Math.cos(h),sn=Math.sin(h);
+        const d=[c*bore[0]+sn*(Math.cos(ph)*u[0]+Math.sin(ph)*w2[0]),c*bore[1]+sn*(Math.cos(ph)*u[1]+Math.sin(ph)*w2[1]),c*bore[2]+sn*(Math.cos(ph)*u[2]+Math.sin(ph)*w2[2])];
+        const b2=o[0]*d[0]+o[1]*d[1]+o[2]*d[2],cc=o[0]*o[0]+o[1]*o[1]+o[2]*o[2]-RE*RE,disc=b2*b2-cc;
+        if(disc<0){pen=false;continue;}const tt=-b2-Math.sqrt(disc);if(tt<0){pen=false;continue;}
+        proj(o[0]+d[0]*tt,o[1]+d[1]*tt,o[2]+d[2]*tt,P);if(P[3]){pen=false;continue;}pen?g.lineTo(P[0],P[1]):g.moveTo(P[0],P[1]);pen=true;cnt++;}
+      if(cnt>3){g.strokeStyle=col;g.globalAlpha=0.7;g.lineWidth=1.2;g.setLineDash([4,3]);g.stroke();g.setLineDash([]);g.globalAlpha=1;}});}
   if(rec){[[rec.partner,'p'],[rec.best,'b']].forEach(([i,kind])=>{if(i<0)return;const p=edgeClamp(satScr[i],true);if(!p)return;
     g.beginPath();g.arc(p[0],p[1],kind==='b'?6:5,0,Math.PI*2);
     if(kind==='b'){g.fillStyle=C.gold;g.fill();g.lineWidth=2;g.strokeStyle=C.ink;g.stroke();}
     else{g.fillStyle=C.globe;g.fill();g.lineWidth=2.2;g.strokeStyle=C.blue;g.stroke();g.beginPath();g.arc(p[0],p[1],2,0,Math.PI*2);g.fillStyle=C.blue;g.fill();}
-    const s=SATS[i],txt=`${s.id}${p.off?' ↗':''}`;label(g,txt,p[0]+9,p[1]+4,kind==='b'?C['gold-ink']:C.blue,11,true);
+    const shN=rec.picked==='sim'?((kind==='b'?rec.shareP:rec.shareQ)||[]).length:0;
+    const s=SATS[i],txt=`${s.id}${shN?' ×'+(shN+1):''}${p.off?' ↗':''}`;label(g,txt,p[0]+9,p[1]+4,kind==='b'?C['gold-ink']:C.blue,11,true);
     const band=kind==='b'?rec.bandP:rec.bandQ;if(band)bandChip(g,band,p[0]+13+g.measureText(txt).width,p[1]+4);});}
   // event pulses (expanding rings)
   const nowP=performance.now();pulses=pulses.filter(pl=>nowP-pl.start<2000);
@@ -976,6 +1052,7 @@ function updateUI(k){
         <dt>Stereo partner</dt><dd class="pair"><b>${ps?ps.id:(r.partnerId||'—')}</b>${ps?` · ${LAYER_NAME[ps.layer]}`:''} ${r.partner!==-1||r.partnerId?bandHtml(r.bandQ):''}${!r.partnerInView?' <span class="warn">not in view</span>':''}</dd>
         ${true?`<dt>Background</dt><dd>${B?(B.bth?'Earth':'Space'):'—'}</dd>
         <dt>Band tasking</dt><dd>${{fixed:'fixed default',opt:'optimized',model:'CS2C'}[r.bandMode]||'—'}</dd>`:''}
+        ${isT?`<dt>Shared FOV</dt><dd>${r.picked==='sim'?shareTxt(r):'—'}</dd>`:''}
         <dt>Stereo angle</dt><dd>${r.status===2?Math.round(r.theta*R2D/5)*5+'°':r.status===1?'mono · no range':'—'}</dd>
       </dl>
       ${r.why&&r.picked==='sim'&&isT?whyHtml(r,st):r.picked==='file'&&r.reason?`<div class="why"><div class="why-h">CS2C rationale</div><p class="why-text">${esc(r.reason)}</p></div>`:`<div class="qbar" title="Geometry score of the custody pick"><i style="width:${B?Math.round(B.q*100):0}%"></i></div>`}
@@ -1010,9 +1087,12 @@ function rationale(r,st){const w=r.why,B=r.bestV;if(!B)return'';const pc=phaseCl
   out.push(w.mono?'mono only: no partner gives 15°+ separation':`${Math.round(w.th*R2D/5)*5}° stereo with ${SATS[r.partner].id}${r.bandQ?' ('+r.bandQ+')':''}`);
   out.push(`${B.dw>=600?'10+ min':B.dw>=60?'~'+Math.round(B.dw/60)+' min':'under a minute'} of access left`);
   if(w.p.fc>0)out.push('fire-control sensor for the glide target');
+  if(r.shareP&&r.shareP.length)out.push(`${SATS[r.best].id} also holds ${r.shareP.length>3?r.shareP.length+' other threats':r.shareP.map(j=>THREATS[j].id).join(', ')} in the same field of view and band`);
   if(w.p.cont>0)out.push(w.held?'held to avoid an unnecessary handover':'kept on track to avoid a handover');
   return out.join(' · ');}
-function whyHtml(r,st){const w=r.why,rows=[['Geometry',w.p.geo,.65],['Dwell',w.p.dwell,.35],['IR band fit',w.p.band,.3],['Fire-control',w.p.fc,.1],['Continuity',w.p.cont,.2]];
+function shareTxt(r){const n=(r.shareP||[]).length+(r.shareQ||[]).length;if(!n)return'dedicated';
+  const ids=[...new Set([...(r.shareP||[]),...(r.shareQ||[])])].map(j=>THREATS[j].id);return`also holds ${ids.slice(0,3).join(', ')}${ids.length>3?' +'+(ids.length-3):''}`;}
+function whyHtml(r,st){const w=r.why,rows=[['Geometry',w.p.geo,.65],['Dwell',w.p.dwell,.35],['IR band fit',w.p.band,.3],['Fire-control',w.p.fc,.1],['Continuity',w.p.cont,.2],['Shared FOV',w.p.share||0,.15]];
   const margin=w.score>0?(w.score-w.second)/w.score:0,conf=w.alt?(margin>.15?'High':margin>.05?'Medium':margin>=0?'Low':'Medium'):'High';
   const altName=w.alt?`${SATS[w.alt[0]].id}${w.alt[1]>=0?' + '+SATS[w.alt[1]].id:''}`:'';
   const altTxt=!w.alt?'no alternative in view':margin>=0?`${altName} scored ${Math.max(1,Math.round(margin*20)*5)}% lower`:`${altName} scores ${Math.max(1,Math.round(-margin*20)*5)}% higher, below the 20% needed to justify a handover`;
@@ -1085,7 +1165,7 @@ function rebuild(keepTime){
 function refreshSummary(){
   $('#bigN').textContent=Math.round(SUMMARY.stereo*100)+'%';
   $('#bigIntro').textContent=MODEL.src==='file'&&!MODEL.file?'No CS2C file loaded yet, so the baseline rule is shown. It holds stereo custody for':`Against this salvo, ${SRC_TXT[MODEL.src]} holds stereo custody for`;
-  $('#bigS').textContent=`${SATS.length} sensor SVs · avg ${SUMMARY.avgV.toFixed(1)} in view · ${SUMMARY.gapThreats?`${SUMMARY.gapThreats} threat${SUMMARY.gapThreats>1?'s':''} with gaps (longest ${fmtDur(SUMMARY.longest)})`:'no custody gaps'}`+(MODEL.src==='sim'||(MODEL.src==='file'&&MODEL.file)?` · same primary as baseline ${Math.round(SUMMARY.agree*100)}% of the time · IR band fit ${Math.round(SUMMARY.fit*100)}% vs ${Math.round(SUMMARY.fit0*100)}% on fixed default bands`:'');
+  $('#bigS').textContent=`${SATS.length} sensor SVs · avg ${SUMMARY.avgV.toFixed(1)} in view · ${SUMMARY.gapThreats?`${SUMMARY.gapThreats} threat${SUMMARY.gapThreats>1?'s':''} with gaps (longest ${fmtDur(SUMMARY.longest)})`:'no custody gaps'}`+(MODEL.src==='sim'||(MODEL.src==='file'&&MODEL.file)?` · same primary as baseline ${Math.round(SUMMARY.agree*100)}% of the time · IR band fit ${Math.round(SUMMARY.fit*100)}% vs ${Math.round(SUMMARY.fit0*100)}% on fixed default bands${SUMMARY.tasked?` · shared fields of view: avg ${SUMMARY.tasked.toFixed(1)} SVs tasked for ${SUMMARY.slots.toFixed(1)} custody slots`:''}`:'');
   if(MODEL.src==='file')$('#fileStatus').innerHTML=fileStatusText();
   lastUI=0;drawChart();
 }
