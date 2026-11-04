@@ -82,19 +82,20 @@ button{font:inherit;color:inherit}
 .kill:hover{background:color-mix(in srgb,var(--bad) 10%,transparent)}
 .linkbtn{border:0;background:none;padding:0;color:var(--blue);cursor:pointer;font-size:inherit;text-decoration:underline}
 .out-line{color:var(--bad)}
-.feed{position:absolute;top:12px;left:50%;transform:translateX(-50%);width:min(460px,calc(100% - 760px));display:flex;flex-direction:column;gap:4px;z-index:2;pointer-events:none}
-.ev,.ev-empty{pointer-events:auto;display:grid;grid-template-columns:auto auto 1fr;gap:8px;align-items:center;text-align:left;width:100%;
-  background:color-mix(in srgb,var(--panel) 88%,transparent);border:1px solid var(--line);border-left:3px solid var(--line);border-radius:7px;padding:5px 9px;font-size:11.5px;cursor:pointer;backdrop-filter:blur(6px);opacity:.72}
+.feed{display:flex;flex-direction:column;gap:3px;height:92px;overflow:hidden;border:1px solid var(--line);border-radius:8px;padding:4px;background:var(--panel-2)}
+.ev,.ev-empty{display:grid;grid-template-columns:auto auto 1fr;gap:7px;align-items:center;text-align:left;width:100%;
+  background:transparent;border:0;border-left:3px solid var(--line);border-radius:4px;padding:3px 7px;font-size:11px;line-height:1.3;cursor:pointer;opacity:.6;min-height:26px}
+.ev .ev-x{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ev:hover{background:var(--panel)}
 .ev-empty{display:block;color:var(--muted);cursor:default}
-.ev.fresh{opacity:1;box-shadow:var(--shadow)}
+.ev.fresh{opacity:1}
 .ev.enter{animation:evIn .5s ease-out}
-@keyframes evIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+@keyframes evIn{from{opacity:.3}to{opacity:1}}
 @media (prefers-reduced-motion: reduce){.ev.enter{animation:none}}
 .ev-t{font-family:var(--f-mono);font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums}
 .ev-x{min-width:0}
 .ev-launch{border-left-color:var(--plume)}.ev-task,.ev-retask{border-left-color:var(--gold)}.ev-retask-out,.ev-gap{border-left-color:var(--bad)}
 .ev-phase{border-left-color:var(--blue)}.ev-maneuver{border-left-color:var(--hgv)}.ev-regain{border-left-color:var(--ok)}.ev-impact{border-left-color:var(--muted)}
-@media (max-width:1180px) and (min-width:861px){.feed{display:none}}
 .band{display:inline-block;font-family:var(--f-mono);font-size:9.5px;font-weight:600;letter-spacing:.03em;padding:0 5px;border-radius:3px;color:#fff;line-height:15px;vertical-align:1px}
 .band.SWIR{background:var(--swir)}.band.MWIR{background:var(--mwir)}.band.LWIR{background:var(--lwir)}
 .band.none{background:var(--line);color:var(--muted)}
@@ -179,8 +180,6 @@ details.sec:not([open]){gap:0}
 .empty{font-size:11.5px;color:var(--muted);padding:4px 6px}
 @media (max-width:860px){
   .tools{flex-wrap:wrap;justify-content:flex-end;left:10px}
-  .feed{position:absolute;top:8px;left:8px;right:8px;transform:none;width:auto}
-  .feed .ev:nth-child(n+3){display:none}
   html,body{height:auto}
   body{overflow:auto}
   body{padding-top:calc(var(--bh) + env(safe-area-inset-top,0px));padding-bottom:calc(var(--bh) + env(safe-area-inset-bottom,0px))}
@@ -198,7 +197,6 @@ details.sec:not([open]){gap:0}
 <div class="stage">
   <canvas id="world" aria-hidden="true"></canvas>
   <canvas id="globe" aria-label="Globe showing sensor satellites, launch sites and threat trajectories"></canvas>
-  <div class="feed" id="feed" aria-live="polite"></div>
   <div class="tools">
     <div class="seg" id="pivot" title="What the camera orbits around"><button data-v="earth" aria-pressed="true">Orbit Earth</button><button data-v="focus" aria-pressed="false">Orbit focus</button></div>
     <button id="north" class="wide" title="Level the horizon with north up">N↑</button>
@@ -342,6 +340,10 @@ details.sec:not([open]){gap:0}
 
 <aside class="panel" id="right">
   <div class="focus" id="focus"></div>
+  <div>
+    <div class="list-h">CS2C events <span id="feedScope">all threats</span></div>
+    <div class="feed" id="feed" aria-live="polite"></div>
+  </div>
   <div>
     <div class="list-h">Launch sites <span>SVs in view · best SV</span></div>
     <div class="list" id="sites"></div>
@@ -962,6 +964,7 @@ function updateUI(k){
   // event feed: latest events up to now
   const fj=S.focus&&S.focus.kind==='threat'&&!S.autoFocus?S.focus.i:-1;
   const evs=[];for(let i=EVENTS.length-1;i>=0&&evs.length<3;i--)if(EVENTS[i].t<=S.t&&(fj<0||EVENTS[i].j===fj))evs.push(EVENTS[i]);
+  $('#feedScope').textContent=fj>=0?THREATS[fj].id+' only':'all threats';
   const feedKey=evs.map(e=>e.t+'|'+e.j+'|'+e.kind).join(',');if(feedKey!==lastFeedKey){const isNew=lastFeedKey&&evs.length&&!lastFeedKey.startsWith(evs[0].t+'|'+evs[0].j);lastFeedKey=feedKey;
   $('#feed').innerHTML=evs.length?evs.map((e,n)=>{const th=THREATS[e.j];return`<button class="ev ev-${e.kind}${n===0?' fresh':''}${n===0&&isNew?' enter':''}" data-j="${e.j}"><span class="ev-t">T+${fmtT(e.t)}</span><span class="chip ${th.type}">${th.id}</span><span class="ev-x">${esc(e.text)}</span></button>`;}).join(''):'<div class="ev-empty">Launch watch · CS2C events appear here</div>';}
   $('#outLine').hidden=!OUTAGES.length;$('#outN').textContent=OUTAGES.length?`${OUTAGES.length} SV${OUTAGES.length>1?'s':''} knocked out (${OUTAGES.map(o=>SATS[o.s]?SATS[o.s].id:'?').join(', ')})`:'';
