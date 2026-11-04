@@ -184,6 +184,14 @@ details.sec:not([open]){gap:0}
 .qbar i{display:block;height:100%;background:var(--gold);width:0}
 .list-h{display:flex;justify-content:space-between;align-items:baseline;font-size:11.5px;font-weight:600}
 .list-h span{font-weight:400;color:var(--muted);font-size:10.5px}
+.fold>summary{cursor:pointer;list-style:none;padding:2px 0}
+.fold>summary::-webkit-details-marker{display:none}
+.fold>summary::before{content:"▸";color:var(--muted);font-size:10px;margin-right:6px;display:inline-block;transition:transform .15s}
+.fold[open]>summary::before{transform:rotate(90deg)}
+.fold>summary{justify-content:flex-start}
+.fold>summary span{margin-left:auto}
+.fold>summary:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:4px}
+.fold[open]>.list{margin-top:4px}
 .list{display:flex;flex-direction:column;gap:2px}
 .row{display:grid;grid-template-columns:auto 1fr auto;gap:2px 8px;align-items:center;padding:6px 6px;border-radius:6px;cursor:pointer;border:1px solid transparent;background:none;text-align:left;width:100%}
 .row:hover{background:var(--panel-2)}
@@ -358,14 +366,14 @@ details.sec:not([open]){gap:0}
     <div class="list-h">CS2C events <span id="feedScope">all threats</span></div>
     <div class="feed" id="feed" aria-live="polite"></div>
   </div>
-  <div>
-    <div class="list-h">Launch sites <span>SVs in view · best SV</span></div>
+  <details class="fold" id="foldSites">
+    <summary class="list-h">Launch sites <span id="sitesSum">SVs in view · best SV</span></summary>
     <div class="list" id="sites"></div>
-  </div>
-  <div>
-    <div class="list-h">Threats <span>custody over flight</span></div>
+  </details>
+  <details class="fold" id="foldThreats" open>
+    <summary class="list-h">Threats <span id="threatsSum">custody over flight</span></summary>
     <div class="list" id="threats"></div>
-  </div>
+  </details>
 </aside>
 
 
@@ -982,6 +990,10 @@ function updateUI(k){
   const feedKey=evs.map(e=>e.t+'|'+e.j+'|'+e.kind).join(',');if(feedKey!==lastFeedKey){const isNew=lastFeedKey&&evs.length&&!lastFeedKey.startsWith(evs[0].t+'|'+evs[0].j);lastFeedKey=feedKey;
   $('#feed').innerHTML=evs.length?evs.map((e,n)=>{const th=THREATS[e.j];return`<button class="ev ev-${e.kind}${n===0?' fresh':''}${n===0&&isNew?' enter':''}" data-j="${e.j}"><span class="ev-t">T+${fmtT(e.t)}</span><span class="chip ${th.type}">${th.id}</span><span class="ev-x">${esc(e.text)}</span></button>`;}).join(''):'<div class="ev-empty">Launch watch · CS2C events appear here</div>';}
   $('#outLine').hidden=!OUTAGES.length;$('#outN').textContent=OUTAGES.length?`${OUTAGES.length} SV${OUTAGES.length>1?'s':''} knocked out (${OUTAGES.map(o=>SATS[o.s]?SATS[o.s].id:'?').join(', ')})`:'';
+  // collapsed-section summaries
+  { const act=THR_REC.map(r=>r[k]).filter(Boolean),c=[0,0,0];act.forEach(r=>c[r.status]++);
+    $('#threatsSum').textContent=$('#foldThreats').open?'custody over flight':(act.length?`${act.length} airborne · ${c[2]} stereo · ${c[1]} mono · ${c[0]} gap`:`${THREATS.length} queued`);
+    $('#sitesSum').textContent=$('#foldSites').open?'SVs in view · best SV':`${SITES.length} sites watched`; }
   // rows
   SITES.forEach((s,j)=>{const rr=SITE_REC[j][k],el=document.getElementById('site-'+j);if(!el)return;
     el.querySelector('.rt').innerHTML=`${s.name} <small>${rr.vis.length} SVs · ${rr.best>=0?SATS[rr.best].id:'none'}</small>`;
@@ -1159,6 +1171,8 @@ function loop(now){const dt=Math.min(0.1,(now-last)/1000);last=now;
 $('#focus').addEventListener('click',e=>{const b=e.target.closest('[data-kill]');if(b){knockOut(+b.dataset.kill);}});
 $('#feed').addEventListener('click',e=>{const it=e.target.closest('[data-j]');if(it)setFocus({kind:'threat',i:+it.dataset.j});});
 $('#clearOut').onclick=()=>{OUTAGES=[];recomputeSelection();};
+['foldSites','foldThreats'].forEach(id=>{const el=$('#'+id);try{const v=localStorage.getItem('cs2c-'+id);if(v!==null)el.open=v==='1';}catch(_){}
+  el.addEventListener('toggle',()=>{try{localStorage.setItem('cs2c-'+id,el.open?'1':'0');}catch(_){}lastUI=0;drawStrips();});});
 $('#srcSeg').onclick=e=>{const b=e.target.closest('button');if(b)setSource(b.dataset.v);};
 $('#modelFile').onchange=e=>{const f=e.target.files&&e.target.files[0];if(!f)return;const rd=new FileReader();
   rd.onload=()=>{try{loadModel(JSON.parse(rd.result),f.name);}catch(err){$('#fileStatus').innerHTML=`<span style="color:var(--bad)">Couldn't read ${f.name}: ${err.message}</span>`;}};rd.readAsText(f);e.target.value='';};
