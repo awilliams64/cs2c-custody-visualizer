@@ -16,6 +16,7 @@ The page is a single self-contained HTML file (`index.html`) with no build tooli
   - **T1–T3 (FY29+):** adds Tranche 3 (72 SVs, about half missile-defense / fire-control).
 - **Threats:** salvos of 1, 5, 10 or 20 from North Korea, Iran, China or Russia launch sites; ballistic RVs (boost, midcourse, re-entry) and HGVs (boost, 35–70 km glide with cross-range maneuver, terminal dive).
 - **Custody:** each threat is tagged stereo (two SVs, ≥15° separation), mono (one SV) or gap (none), with per-threat custody bars over the whole flight and a salvo-level stereo-custody percentage.
+- **IR band tasking:** each tasked SV shows the band it collects in (SWIR, MWIR or LWIR) on the globe, in the focus card and in the threat list. The simulated feed chooses band and geometry together; the summary reports *IR band fit* against SVs left on their default bands.
 - **Selection source:** *Simulated* (default placeholder feed) or *CS2C* (picks loaded from model output). A dashed ring marks the baseline geometry rule's pick wherever it differs.
 
 ## Controls
@@ -38,7 +39,8 @@ Choose **CS2C** under *Custody selection* and load a JSON file in this shape:
 {
   "model": "CS2C v0.1",
   "selections": [
-    { "t": 120, "target": "B-01", "primary": "T2-0304", "partner": "E1-0102" },
+    { "t": 120, "target": "B-01", "primary": "T2-0304", "primaryBand": "LWIR",
+      "partner": "E1-0102", "partnerBand": "MWIR" },
     { "t": 130, "target": "Sohae", "primary": "T1-0205", "partner": null }
   ]
 }
@@ -47,6 +49,7 @@ Choose **CS2C** under *Custody selection* and load a JSON file in this shape:
 - `t`: seconds from scenario start (T+).
 - `target`: a threat ID (`B-01`, `H-03`) or a launch-site name.
 - `primary` / `partner`: SV IDs as labeled on the globe (`T1-0101`, `T2-0304`, `E1-0102`, `GEO-1`, `NGP-2`). `partner` may be `null`.
+- `primaryBand` / `partnerBand`: optional, `SWIR`, `MWIR` or `LWIR`. When present, the page shows CS2C's band choice.
 - Each pick holds until the next one for the same target.
 
 For a live integration, call `window.CS2C.load(data)` with the same object; `window.CS2C.clear()` resets it. Picks that reference an SV that can't see the target are flagged "not in view"; unknown SV IDs are listed in the file status.
@@ -69,6 +72,17 @@ python3 build.py
 | LEO fire-control | 4,500 | 4,000 | 4,000 | 3,500 |
 | MEO | 16,000 | 11,000 | 11,000 | — |
 | GEO / Polar | line of sight | — | — | — |
+
+IR bands (notional): LEO wide field of view SVs collect in SWIR (default) or MWIR; LEO fire-control in MWIR (default) or LWIR; MEO, GEO and polar in SWIR (default) or MWIR. Band fit by phase and background:
+
+| Band fit | SWIR | MWIR | LWIR |
+|---|---|---|---|
+| Boost plume | 1.0 | 0.9 | 0.3 |
+| Midcourse, against space | 0.25 | 0.55 | 1.0 |
+| Midcourse, against Earth | 0.15 | 0.45 | 0.45 |
+| Re-entry heating | 0.8 | 1.0 | 0.5 |
+| Glide, against space | 0.55 | 1.0 | 0.75 |
+| Glide, against Earth | 0.5 | 0.9 | 0.4 |
 
 Assumed where no public figure exists: plane splits for Tranches 2 and 3, the 81° LEO inclination, the 8,000 km MEO altitude, and the GEO slot positions.
 

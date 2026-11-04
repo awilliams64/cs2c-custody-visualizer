@@ -23,6 +23,7 @@
   --globe:#FBFBF9; --coast:#30353A; --grat:#E6E8E3; --sv:#A5ABAF;
   --gold:#D9A21B; --gold-ink:#7E5B05; --blue:#2C69B0; --bal:#C2391F; --hgv:#7A3BB3; --plume:#EE7F22;
   --ok:#2E8A57; --warn:#D9A21B; --bad:#C2391F;
+  --swir:#1F8FA6; --mwir:#D2691E; --lwir:#A8327A;
   --shadow:0 1px 2px rgba(20,24,28,.06),0 6px 24px rgba(20,24,28,.07);
   --bh:22px; --u-green:#007A33; --u-ink:#FFFFFF;
   --f-display:"Archivo",system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -34,12 +35,14 @@
   --globe:#12161A; --coast:#88939A; --grat:#1C2226; --sv:#58626A;
   --gold:#F2C24A; --gold-ink:#F2C24A; --blue:#72A9EA; --bal:#F26A4F; --hgv:#B98CF2; --plume:#FF9A45;
   --ok:#4CC48B; --warn:#F2C24A; --bad:#F26A4F;
+  --swir:#4CC3DA; --mwir:#F29A4A; --lwir:#E27BBE;
   --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 28px rgba(0,0,0,.35); color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0D1012; --panel:#161A1D; --panel-2:#1B2023; --ink:#E7EAEB; --muted:#9AA3A9; --line:#2B3236;
   --globe:#12161A; --coast:#88939A; --grat:#1C2226; --sv:#58626A;
   --gold:#F2C24A; --gold-ink:#F2C24A; --blue:#72A9EA; --bal:#F26A4F; --hgv:#B98CF2; --plume:#FF9A45;
   --ok:#4CC48B; --warn:#F2C24A; --bad:#F26A4F;
+  --swir:#4CC3DA; --mwir:#F29A4A; --lwir:#E27BBE;
   --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 28px rgba(0,0,0,.35); color-scheme:dark}
 html,body{height:100%}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:13px;line-height:1.4;overflow:hidden}
@@ -80,6 +83,9 @@ button{font:inherit;color:inherit}
 .src code{font-family:var(--f-mono);font-size:10px}
 .kv .src-tag{font-family:var(--f-mono);font-size:10px;color:var(--muted)}
 .kv .warn{color:var(--bad)}
+.band{display:inline-block;font-family:var(--f-mono);font-size:9.5px;font-weight:600;letter-spacing:.03em;padding:0 5px;border-radius:3px;color:#fff;line-height:15px;vertical-align:1px}
+.band.SWIR{background:var(--swir)}.band.MWIR{background:var(--mwir)}.band.LWIR{background:var(--lwir)}
+.band.none{background:var(--line);color:var(--muted)}
 .arch-note{margin:0;font-size:11px;color:var(--muted);line-height:1.45}
 .arch-note b{color:var(--ink);font-weight:600}
 .checks.one{grid-template-columns:1fr}
@@ -254,12 +260,13 @@ details.sec:not([open]){gap:0}
   "model": "CS2C v0.1",
   "selections": [
     { "t": 120, "target": "B-01",
-      "primary": "T2-0304", "partner": "E1-0102" },
+      "primary": "T2-0304", "primaryBand": "LWIR",
+      "partner": "E1-0102", "partnerBand": "MWIR" },
     { "t": 130, "target": "Sohae",
       "primary": "T1-0205", "partner": null }
   ]
 }</pre>
-        <p class="arch-note">t is seconds from scenario start (T+). target is a threat ID or launch-site name. SV IDs match the globe labels (T1-0101, E1-0102, GEO-1, NGP-2). Each pick holds until the next one for that target. A live integration can call <code>window.CS2C.load(data)</code> with the same object.</p>
+        <p class="arch-note">t is seconds from scenario start (T+). target is a threat ID or launch-site name. SV IDs match the globe labels (T1-0101, E1-0102, GEO-1, NGP-2). primaryBand and partnerBand (SWIR, MWIR or LWIR) are optional. Each pick holds until the next one for that target. A live integration can call <code>window.CS2C.load(data)</code> with the same object.</p>
         <button class="copy" id="copySchema">Copy example</button>
       </details>
     </div>
@@ -300,6 +307,17 @@ details.sec:not([open]){gap:0}
         <tr><td>Polar</td><td>LOS</td><td>—</td><td>—</td><td>—</td></tr>
       </table>
       <p><b>Best collection geometry</b> is the highest score: 40% slant range, 25% elevation of the SV above the target's horizon, 35% remaining access time (dwell, capped at 5 min). The pick is held unless another SV beats it by 15%, to avoid needless handovers.</p>
+      <p><b>IR band tasking</b> (notional). Each SV collects in one band at a time from the bands its layer carries. LEO WFOV: SWIR (default) or MWIR. LEO fire-control: MWIR (default) or LWIR. MEO, GEO, polar: SWIR (default) or MWIR. Band fit depends on flight phase and on whether the target sits against space (above the horizon) or Earth (below the horizon):</p>
+      <table>
+        <tr><th>Band fit</th><th>SWIR</th><th>MWIR</th><th>LWIR</th></tr>
+        <tr><td>Boost plume</td><td>1.0</td><td>0.9</td><td>0.3</td></tr>
+        <tr><td>Midcourse · space</td><td>0.25</td><td>0.55</td><td>1.0</td></tr>
+        <tr><td>Midcourse · Earth</td><td>0.15</td><td>0.45</td><td>0.45</td></tr>
+        <tr><td>Re-entry heating</td><td>0.8</td><td>1.0</td><td>0.5</td></tr>
+        <tr><td>Glide · space</td><td>0.55</td><td>1.0</td><td>0.75</td></tr>
+        <tr><td>Glide · Earth</td><td>0.5</td><td>0.9</td><td>0.4</td></tr>
+      </table>
+      <p>The simulated feed chooses band and geometry together; the baseline leaves every SV on its default band.</p>
       <p><b>Custody</b> pairs the best SV with the partner that maximizes sin(stereo angle) × quality. Stereo needs at least 15° between lines of sight. Fire-control (FC) SVs have longer notional reach against dim glide vehicles, standing in for the medium field of view sensors. One SV is mono custody (angles only, no range). No SV is a gap.</p>
     </div>
   </details>
@@ -353,6 +371,18 @@ const ARCH={
   t2:{label:'T1+T2',year:'~2029',leo:[['T1',5,7,0,()=>false],['T2',6,9,0.5,(j,k)=>k===0]],meo:[['E1',2,6,0],['E2',2,5,0.5]],note:'<b>Tranches 1 + 2</b>: 89 LEO SVs, 6 of them fire-control; <b>MEO Epochs 1 + 2</b>: 22 SVs. The fact sheet goal is near-global stereo custody with preliminary fire control.'},
   t3:{label:'T1–T3',year:'FY29+',leo:[['T1',5,7,0,()=>false],['T2',6,9,0.5,(j,k)=>k===0],['T3',8,9,0.25,(j,k)=>j%2===0]],meo:[['E1',2,6,0],['E2',2,5,0.5]],note:'<b>Tranches 1–3</b>: 161 LEO SVs, 42 of them fire-control (T3 is about half missile-defense payloads); MEO Epochs 1 + 2.'}
 };
+// IR bands (notional). Each layer carries a default band (first) and any bands it can switch to.
+const BANDS=['SWIR','MWIR','LWIR'];
+const LAYER_BANDS={LEO:['SWIR','MWIR'],FC:['MWIR','LWIR'],MEO:['SWIR','MWIR'],GEO:['SWIR','MWIR'],HEO:['SWIR','MWIR']};
+// band suitability 0..1 by flight phase and background (bth: target seen against Earth; else against space)
+function bandSuit(pc,band,bth){
+  if(pc==='boost')return{SWIR:1,MWIR:.9,LWIR:.3}[band];
+  if(pc==='reentry')return{SWIR:.8,MWIR:1,LWIR:.5}[band];
+  if(pc==='mid')return(bth?{SWIR:.15,MWIR:.45,LWIR:.45}:{SWIR:.25,MWIR:.55,LWIR:1})[band];
+  return(bth?{SWIR:.5,MWIR:.9,LWIR:.4}:{SWIR:.55,MWIR:1,LWIR:.75})[band]; // glide / terminal
+}
+function bandsFor(v,layer,pc){const bs=LAYER_BANDS[layer];v.band0=bs[0];v.bs0=bandSuit(pc,bs[0],v.bth);
+  let bb=bs[0],m=-1;bs.forEach(b=>{const s=bandSuit(pc,b,v.bth);if(s>m){m=s;bb=b;}});v.band=bb;v.bs=m;}
 const PHASE_LABEL={boost:'Boost',mid:'Midcourse',reentry:'Re-entry',glide:'Glide',terminal:'Terminal glide',watch:'Launch watch'};
 
 const S={region:'nk',salvo:10,mix:'mixed',arch:'t2',layers:{LEO:true,MEO:true,GEO:true,HEO:true},rings:true,allLos:false,
@@ -471,14 +501,17 @@ function access(sp,tp,layer,pc,out){
   if(Math.hypot(cx,cy,cz)<RE-0.01)return null;
   const tn=norm(tp),lx=-dx/R,ly=-dy/R,lz=-dz/R;
   const se=(tp[0]*lx+tp[1]*ly+tp[2]*lz)/tn;
-  return{R,se,lx,ly,lz,rf:1-R/Math.min(lim,45000)};
+  // background: does the line of sight continue past the target into the Earth?
+  const ux=dx/R,uy=dy/R,uz=dz/R,bb=tp[0]*ux+tp[1]*uy+tp[2]*uz,cc=tn*tn-RE*RE,disc=bb*bb-cc;
+  const bth=disc>0&&(-bb-Math.sqrt(disc))>0;
+  return{R,se,lx,ly,lz,bth,rf:1-R/Math.min(lim,45000)};
 }
 function precompute(){
   NSTEP=Math.ceil(DUR/DT)+1;
   const buf=new Float64Array(SATS.length*3),sp=[0,0,0];
   SITE_REC=SITES.map(()=>new Array(NSTEP));THR_REC=THREATS.map(()=>new Array(NSTEP));
   const scan=(tp,pc)=>{const v=[];for(let i=0;i<SATS.length;i++){sp[0]=buf[i*3];sp[1]=buf[i*3+1];sp[2]=buf[i*3+2];
-      const a=access(sp,tp,SATS[i].layer,pc);if(a){a.s=i;v.push(a);}}return v;};
+      const a=access(sp,tp,SATS[i].layer,pc);if(a){a.s=i;bandsFor(a,SATS[i].layer,pc);v.push(a);}}return v;};
   for(let k=0;k<NSTEP;k++){
     const t=k*DT;allSatPos(t,buf);
     SITES.forEach((st,j)=>{SITE_REC[j][k]={vis:scan(st.p,'boost'),phase:'watch'};});
@@ -488,17 +521,18 @@ function precompute(){
   saveBaseline();applySource();
 }
 function computeStats(){
-  STATS=[];let act=0,st2=0,sumV=0,agree=0;
+  STATS=[];let act=0,st2=0,sumV=0,agree=0,fit=0,fit0=0,nfit=0;
   const gapRuns=THREATS.map(()=>({cur:0,max:0,any:false}));
   for(let k=0;k<NSTEP;k++){
     let mn=Infinity,mx=0,sm=0,n=0,c=[0,0,0];
     THR_REC.forEach((rec,j)=>{const r=rec[k];if(!r)return;n++;const v=r.vis.length;mn=Math.min(mn,v);mx=Math.max(mx,v);sm+=v;c[r.status]++;
       if(r.best===r.b.best)agree++;
+      const pc=phaseClass(r.phase);if(r.bestV&&r.bandP&&r.b.bestV){fit+=bandSuit(pc,r.bandP,r.bestV.bth);fit0+=r.b.bestV.bs0;nfit++;}
       const g=gapRuns[j];if(r.status===0){g.cur+=DT;g.any=true;g.max=Math.max(g.max,g.cur);}else g.cur=0;});
     STATS.push(n?{n,min:mn,max:mx,avg:sm/n,c}:null);
     act+=n;st2+=c[2];sumV+=sm;
   }
-  SUMMARY={stereo:act?st2/act:0,avgV:act?sumV/act:0,agree:act?agree/act:1,gapThreats:gapRuns.filter(g=>g.any).length,longest:Math.max(0,...gapRuns.map(g=>g.max)),maxV:Math.max(1,...STATS.filter(Boolean).map(s=>s.max))};
+  SUMMARY={stereo:act?st2/act:0,avgV:act?sumV/act:0,agree:act?agree/act:1,fit:nfit?fit/nfit:0,fit0:nfit?fit0/nfit:0,gapThreats:gapRuns.filter(g=>g.any).length,longest:Math.max(0,...gapRuns.map(g=>g.max)),maxV:Math.max(1,...STATS.filter(Boolean).map(s=>s.max))};
 }
 
 /* ---------- custody selection source: baseline rule, simulated feed, or CS2C output ---------- */
@@ -516,7 +550,7 @@ function setPick(r,bi,pi,pid,qid){
 function simPicks(rec){let pb=-1,pp=-1;
   rec.forEach(r=>{if(!r)return;const V=r.vis;if(!V.length){r.sim=[-1,-1];pb=pp=-1;return;}
     const glide=r.phase==='glide'||r.phase==='terminal';
-    const qq=v=>(v.q||0)+(glide&&SATS[v.s].layer==='FC'?0.15:0)+(v.s===pb||v.s===pp?0.12:0);
+    const qq=v=>(v.q||0)+0.3*(v.bs||0)+(glide&&SATS[v.s].layer==='FC'?0.1:0)+(v.s===pb||v.s===pp?0.12:0);
     let best=-1,bi=-1,bj=-1;
     for(let i=0;i<V.length;i++)for(let j=i+1;j<V.length;j++){const a=V[i],b=V[j];
       const th=Math.acos(Math.max(-1,Math.min(1,a.lx*b.lx+a.ly*b.ly+a.lz*b.lz)));if(th<15*D2R)continue;
@@ -526,6 +560,7 @@ function simPicks(rec){let pb=-1,pp=-1;
     pb=r.sim[0];pp=r.sim[1];});}
 function lookupPick(arr,t){if(!arr||!arr.length||arr[0].t>t)return null;let lo=0,hi=arr.length-1;
   while(lo<hi){const m=(lo+hi+1)>>1;if(arr[m].t<=t)lo=m;else hi=m-1;}return arr[lo];}
+function fixedBands(r){r.bandP=r.bestV?r.bestV.band0:null;r.bandQ=r.partnerV?r.partnerV.band0:null;r.bandMode='fixed';}
 function applySource(){
   const idMap=new Map(SATS.map((s,i)=>[s.id,i]));
   const recs=[...SITE_REC.map((r,j)=>[r,SITES[j].name]),...THR_REC.map((r,j)=>[r,THREATS[j].id])];
@@ -533,12 +568,12 @@ function applySource(){
     if(MODEL.src==='sim')simPicks(rec);
     const arr=MODEL.src==='file'&&MODEL.file?MODEL.file.byKey.get(key.toLowerCase()):null;
     rec.forEach((r,k)=>{if(!r)return;
-      if(MODEL.src==='base'){Object.assign(r,r.b);r.picked='base';r.pickInView=true;r.partnerInView=true;r.pickId=r.partnerId=null;return;}
-      if(MODEL.src==='sim'){setPick(r,r.sim[0],r.sim[1]);r.picked='sim';return;}
+      if(MODEL.src==='base'){Object.assign(r,r.b);r.picked='base';r.pickInView=true;r.partnerInView=true;r.pickId=r.partnerId=null;fixedBands(r);return;}
+      if(MODEL.src==='sim'){setPick(r,r.sim[0],r.sim[1]);r.picked='sim';r.bandP=r.bestV?r.bestV.band:null;r.bandQ=r.partnerV?r.partnerV.band:null;r.bandMode='opt';return;}
       const p=lookupPick(arr,k*DT);
-      if(!p){Object.assign(r,r.b);r.picked='none';r.pickInView=true;r.partnerInView=true;r.pickId=r.partnerId=null;return;}
+      if(!p){Object.assign(r,r.b);r.picked='none';r.pickInView=true;r.partnerInView=true;r.pickId=r.partnerId=null;fixedBands(r);return;}
       const bi=p.primary?(idMap.has(p.primary)?idMap.get(p.primary):-2):-1,pi=p.partner?(idMap.has(p.partner)?idMap.get(p.partner):-2):-1;
-      setPick(r,bi,pi,p.primary,p.partner);r.picked='file';});
+      setPick(r,bi,pi,p.primary,p.partner);r.picked='file';r.bandP=p.primaryBand;r.bandQ=p.partnerBand;r.bandMode='model';});
   });
   computeStats();
 }
@@ -547,7 +582,8 @@ function loadModel(obj,fallbackName){
   const byKey=new Map();let n=0,bad=0;
   obj.selections.forEach(e=>{if(!e||typeof e.t!=='number'||!e.target){bad++;return;}
     const k=String(e.target).toLowerCase();if(!byKey.has(k))byKey.set(k,[]);
-    byKey.get(k).push({t:e.t,primary:e.primary?String(e.primary):null,partner:e.partner?String(e.partner):null});n++;});
+    const nb=b=>{const u=b?String(b).toUpperCase():null;return BANDS.includes(u)?u:null;};
+    byKey.get(k).push({t:e.t,primary:e.primary?String(e.primary):null,partner:e.partner?String(e.partner):null,primaryBand:nb(e.primaryBand),partnerBand:nb(e.partnerBand)});n++;});
   byKey.forEach(a=>a.sort((x,y)=>x.t-y.t));
   MODEL.file={name:obj.model||fallbackName||'CS2C output',byKey,n,bad};
   setSource('file');
@@ -592,7 +628,7 @@ function selectGeometry(rec){
 /* ---------- theme tokens for canvas ---------- */
 let C={};
 function readTokens(){const cs=getComputedStyle(document.documentElement);
-  ['bg','panel','ink','muted','line','globe','coast','grat','sv','gold','gold-ink','blue','bal','hgv','plume','ok','bad'].forEach(k=>C[k]=cs.getPropertyValue('--'+k).trim());
+  ['bg','panel','ink','muted','line','globe','coast','grat','sv','gold','gold-ink','blue','bal','hgv','plume','ok','bad','swir','mwir','lwir'].forEach(k=>C[k]=cs.getPropertyValue('--'+k).trim());
   staticDirty=true;drawChart();drawStrips();}
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',readTokens);
 new MutationObserver(readTokens).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme','class']});
@@ -774,7 +810,8 @@ function frame(){
     g.beginPath();g.arc(p[0],p[1],kind==='b'?6:5,0,Math.PI*2);
     if(kind==='b'){g.fillStyle=C.gold;g.fill();g.lineWidth=2;g.strokeStyle=C.ink;g.stroke();}
     else{g.fillStyle=C.globe;g.fill();g.lineWidth=2.2;g.strokeStyle=C.blue;g.stroke();g.beginPath();g.arc(p[0],p[1],2,0,Math.PI*2);g.fillStyle=C.blue;g.fill();}
-    const s=SATS[i];label(g,`${s.id}${p.off?' ↗':''}`,p[0]+9,p[1]+4,kind==='b'?C['gold-ink']:C.blue,11,true);});}
+    const s=SATS[i],txt=`${s.id}${p.off?' ↗':''}`;label(g,txt,p[0]+9,p[1]+4,kind==='b'?C['gold-ink']:C.blue,11,true);
+    const band=kind==='b'?rec.bandP:rec.bandQ;if(band)bandChip(g,band,p[0]+13+g.measureText(txt).width,p[1]+4);});}
   updateUI(k);
 }
 function edgeClamp(p,mark){if(!p||p[3])return null;const m=14;
@@ -783,6 +820,9 @@ function edgeClamp(p,mark){if(!p||p[3])return null;const m=14;
   if(p[0]<m)f=Math.min(f,(m-CX)/dx);if(p[0]>W-m)f=Math.min(f,(W-m-CX)/dx);
   if(p[1]<m)f=Math.min(f,(m-CY)/dy);if(p[1]>H-m)f=Math.min(f,(H-m-CY)/dy);
   const q=[CX+dx*f,CY+dy*f,p[2],0];q.off=true;return q;}
+function bandChip(g,band,x,y){g.font='600 9.5px "IBM Plex Mono",ui-monospace,monospace';const w=g.measureText(band).width+8;
+  g.fillStyle=C[band.toLowerCase()];g.beginPath();if(g.roundRect)g.roundRect(x,y-10,w,13,3);else g.rect(x,y-10,w,13);g.fill();
+  g.fillStyle='#fff';g.fillText(band,x+4,y);}
 function label(g,txt,x,y,col,size,bold){g.font=`${bold?600:500} ${size}px "IBM Plex Mono",ui-monospace,monospace`;
   g.lineWidth=3;g.strokeStyle=C.globe;g.lineJoin='round';g.strokeText(txt,x,y);g.fillStyle=col;g.fillText(txt,x,y);}
 
@@ -808,11 +848,13 @@ function updateUI(k){
       html+=`<dl class="kv">
         <dt>Phase</dt><dd>${PHASE_LABEL[st?st.phase:'watch']}${st?` · ${fmtN(st.h)} km alt`:''}</dd>
         <dt>SVs in view</dt><dd><b>${r.vis.length}</b> ${layerMix(r.vis)}</dd>
-        <dt>Custody pick <span class="src-tag">${{base:'baseline',sim:'simulated',file:'CS2C',none:'baseline · no CS2C pick'}[r.picked]||''}</span></dt><dd class="best"><b>${bs?bs.id:(r.pickId||'—')}</b>${bs?` · ${LAYER_NAME[bs.layer]}`:''}${r.best!==-1&&!r.pickInView?' <span class="warn">not in view</span>':''}</dd>
+        <dt>Custody pick <span class="src-tag">${{base:'baseline',sim:'simulated',file:'CS2C',none:'baseline · no CS2C pick'}[r.picked]||''}</span></dt><dd class="best"><b>${bs?bs.id:(r.pickId||'—')}</b>${bs?` · ${LAYER_NAME[bs.layer]}`:''} ${bandHtml(r.bandP)}${r.best!==-1&&!r.pickInView?' <span class="warn">not in view</span>':''}</dd>
         ${MODEL.src!=='base'&&r.b&&r.b.best!==r.best?`<dt>Baseline pick</dt><dd><b>${r.b.best>=0?SATS[r.b.best].id:'—'}</b></dd>`:''}
         ${B?`<dt>Range · elevation</dt><dd>${fmtN(B.R)} km · ${Math.round(Math.asin(Math.max(-1,Math.min(1,B.se)))*R2D)}°</dd>
         <dt>Remaining dwell</dt><dd>${B.dw>=600?'> 10 min':fmtDur(B.dw)}</dd>`:''}
-        <dt>Stereo partner</dt><dd class="pair"><b>${ps?ps.id:(r.partnerId||'—')}</b>${ps?` · ${LAYER_NAME[ps.layer]}`:''}${!r.partnerInView?' <span class="warn">not in view</span>':''}</dd>
+        <dt>Stereo partner</dt><dd class="pair"><b>${ps?ps.id:(r.partnerId||'—')}</b>${ps?` · ${LAYER_NAME[ps.layer]}`:''} ${r.partner!==-1||r.partnerId?bandHtml(r.bandQ):''}${!r.partnerInView?' <span class="warn">not in view</span>':''}</dd>
+        ${B?`<dt>Background</dt><dd>${B.bth?'Earth (below horizon)':'Space (above horizon)'}</dd>
+        <dt>Band tasking</dt><dd>${{fixed:'fixed default',opt:'optimized',model:'CS2C'}[r.bandMode]||'—'}${r.bandMode!=='fixed'&&B&&r.bandP&&r.bandP!==B.band0?` <span class="src-tag">default ${B.band0}</span>`:''}</dd>`:''}
         <dt>Stereo angle</dt><dd>${r.status===2?Math.round(r.theta*R2D)+'°':r.status===1?'mono · no range':'—'}</dd>
       </dl>
       <div class="qbar" title="Geometry score of the custody pick"><i style="width:${B?Math.round(B.q*100):0}%"></i></div>`;
@@ -825,10 +867,11 @@ function updateUI(k){
     el.setAttribute('aria-pressed',f&&f.kind==='site'&&f.i===j);});
   THREATS.forEach((th,j)=>{const rr=THR_REC[j][k],el=document.getElementById('thr-'+j);if(!el)return;const st=threatState(th,S.t);
     el.querySelector('.rt').innerHTML=`${th.siteName} → ${th.target} <small>${st?PHASE_LABEL[st.phase]+' · '+(rr?rr.vis.length:0)+' SVs':S.t<th.tL?'T+'+fmtT(th.tL):'impact'}</small>`;
-    el.querySelector('.st').innerHTML=pill(rr,th);
+    el.querySelector('.st').innerHTML=(st&&rr&&rr.bandP?bandHtml(rr.bandP)+' ':'')+pill(rr,th);
     el.setAttribute('aria-pressed',f&&f.kind==='threat'&&f.i===j);});
   drawChartCursor();drawStrips();
 }
+const bandHtml=b=>b?`<span class="band ${b}">${b}</span>`:'<span class="band none">—</span>';
 function layerMix(vis){const c={};vis.forEach(v=>{const l={LEO:'WFOV',FC:'FC',MEO:'MEO',GEO:'GEO',HEO:'Polar'}[SATS[v.s].layer];c[l]=(c[l]||0)+1;});return Object.keys(c).length?`<span style="color:var(--muted)">(${Object.entries(c).map(([l,n])=>l+' '+n).join(', ')})</span>`:'';}
 function buildLists(){
   $('#sites').innerHTML=SITES.map((s,j)=>`<button class="row" id="site-${j}" aria-pressed="false"><span class="chip S">SITE</span><span class="rt"></span><span></span></button>`).join('');
@@ -892,7 +935,7 @@ function rebuild(keepTime){
 function refreshSummary(){
   $('#bigN').textContent=Math.round(SUMMARY.stereo*100)+'%';
   $('#bigIntro').textContent=MODEL.src==='file'&&!MODEL.file?'No CS2C file loaded yet, so the baseline rule is shown. It holds stereo custody for':`Against this salvo, ${SRC_TXT[MODEL.src]} holds stereo custody for`;
-  $('#bigS').textContent=`${SATS.length} sensor SVs · avg ${SUMMARY.avgV.toFixed(1)} in view · ${SUMMARY.gapThreats?`${SUMMARY.gapThreats} threat${SUMMARY.gapThreats>1?'s':''} with gaps (longest ${fmtDur(SUMMARY.longest)})`:'no custody gaps'}`+(MODEL.src==='sim'||(MODEL.src==='file'&&MODEL.file)?` · same primary as baseline ${Math.round(SUMMARY.agree*100)}% of the time`:'');
+  $('#bigS').textContent=`${SATS.length} sensor SVs · avg ${SUMMARY.avgV.toFixed(1)} in view · ${SUMMARY.gapThreats?`${SUMMARY.gapThreats} threat${SUMMARY.gapThreats>1?'s':''} with gaps (longest ${fmtDur(SUMMARY.longest)})`:'no custody gaps'}`+(MODEL.src==='sim'||(MODEL.src==='file'&&MODEL.file)?` · same primary as baseline ${Math.round(SUMMARY.agree*100)}% of the time · IR band fit ${Math.round(SUMMARY.fit*100)}% vs ${Math.round(SUMMARY.fit0*100)}% on fixed default bands`:'');
   if(MODEL.src==='file')$('#fileStatus').innerHTML=fileStatusText();
   lastUI=0;drawChart();
 }
