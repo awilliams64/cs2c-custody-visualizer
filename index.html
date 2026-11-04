@@ -343,7 +343,7 @@ details.sec:not([open]){gap:0}
         <tr><td>GEO</td><td>LOS</td><td>—</td><td>—</td><td>—</td></tr>
         <tr><td>Polar</td><td>LOS</td><td>—</td><td>—</td><td>—</td></tr>
       </table>
-      <p><b>Shared fields of view</b> (notional half-angles): LEO WFOV 62° (whole Earth disk), LEO fire-control 8°, MEO 26°, GEO 9°, polar 10°. The simulated feed tasks every threat at once: an SV keeps custody of several threats when they all fit inside its field of view and call for the same IR band, which frees other SVs. Narrow fields of view are drawn as a dashed footprint for the focused threat's SVs; ×n on a label is how many threats that SV holds.</p>
+      <p><b>Shared fields of view</b> (notional half-angles): LEO WFOV 62° (whole Earth disk), LEO fire-control 8°, MEO 26°, GEO 9°, polar 10°. The simulated feed tasks every threat at once: an SV keeps custody of several threats when they all fit inside its field of view and call for the same IR band, which frees other SVs. ×n on a label is how many threats that SV holds.</p>
       <p><b>Best collection geometry</b> is the highest score: 40% slant range, 25% elevation of the SV above the target's horizon, 35% remaining access time (dwell, capped at 5 min). The pick is held unless another SV beats it by 15%, to avoid needless handovers.</p>
       <p><b>IR band tasking</b> (notional). Each SV collects in one band at a time from the bands its layer carries. LEO WFOV: SWIR (default) or MWIR. LEO fire-control: MWIR (default) or LWIR. MEO, GEO, polar: SWIR (default) or MWIR. Band fit depends on flight phase and on whether the target sits against space (above the horizon) or Earth (below the horizon):</p>
       <table>
@@ -978,23 +978,14 @@ function frame(){
   if(rec&&MODEL.src!=='base'&&rec.b&&rec.b.best>=0&&rec.b.best!==rec.best){const p=edgeClamp(satScr[rec.b.best]);
     if(p){g.setLineDash([3,3]);g.strokeStyle=C.ink;g.lineWidth=1.4;g.beginPath();g.arc(p[0],p[1],8,0,Math.PI*2);g.stroke();g.setLineDash([]);
       label(g,'baseline',p[0]+10,p[1]-6,C.muted,9.5);}}
-  // shared custody: thin lines from the focused threat's SVs to the other threats they hold, and narrow-FOV footprints
+  // shared custody: thin lines from the focused threat's SVs to the other threats they hold
   if(rec&&rec.picked==='sim'){
-    [[rec.best,rec.shareP,rec.boreP,C.gold],[rec.partner,rec.shareQ,rec.boreQ,C.blue]].forEach(([si,share,bore,col])=>{if(si<0)return;
+    [[rec.best,rec.shareP,C.gold],[rec.partner,rec.shareQ,C.blue]].forEach(([si,share,col])=>{if(si<0)return;
       const sp=edgeClamp(satScr[si]);
       if(sp&&share&&share.length){g.strokeStyle=col;g.globalAlpha=0.5;g.lineWidth=1;g.setLineDash([2,4]);
         share.forEach(j=>{const st=threatState(THREATS[j],t);if(!st)return;proj(st.p[0],st.p[1],st.p[2],P);if(P[3])return;g.beginPath();g.moveTo(sp[0],sp[1]);g.lineTo(P[0],P[1]);g.stroke();});
         g.setLineDash([]);g.globalAlpha=1;}
-      const half=FOV_HALF[SATS[si].layer];if(!bore||half>=20)return;
-      const o=[satBuf[si*3],satBuf[si*3+1],satBuf[si*3+2]],h=half*D2R;
-      const u=unit(cross(bore,Math.abs(bore[2])<0.9?[0,0,1]:[1,0,0])),w2=cross(bore,u);
-      g.beginPath();let pen=false,cnt=0;
-      for(let a=0;a<=48;a++){const ph=a/48*Math.PI*2,c=Math.cos(h),sn=Math.sin(h);
-        const d=[c*bore[0]+sn*(Math.cos(ph)*u[0]+Math.sin(ph)*w2[0]),c*bore[1]+sn*(Math.cos(ph)*u[1]+Math.sin(ph)*w2[1]),c*bore[2]+sn*(Math.cos(ph)*u[2]+Math.sin(ph)*w2[2])];
-        const b2=o[0]*d[0]+o[1]*d[1]+o[2]*d[2],cc=o[0]*o[0]+o[1]*o[1]+o[2]*o[2]-RE*RE,disc=b2*b2-cc;
-        if(disc<0){pen=false;continue;}const tt=-b2-Math.sqrt(disc);if(tt<0){pen=false;continue;}
-        proj(o[0]+d[0]*tt,o[1]+d[1]*tt,o[2]+d[2]*tt,P);if(P[3]){pen=false;continue;}pen?g.lineTo(P[0],P[1]):g.moveTo(P[0],P[1]);pen=true;cnt++;}
-      if(cnt>3){g.strokeStyle=col;g.globalAlpha=0.7;g.lineWidth=1.2;g.setLineDash([4,3]);g.stroke();g.setLineDash([]);g.globalAlpha=1;}});}
+      });}
   if(rec){[[rec.partner,'p'],[rec.best,'b']].forEach(([i,kind])=>{if(i<0)return;const p=edgeClamp(satScr[i],true);if(!p)return;
     g.beginPath();g.arc(p[0],p[1],kind==='b'?6:5,0,Math.PI*2);
     if(kind==='b'){g.fillStyle=C.gold;g.fill();g.lineWidth=2;g.strokeStyle=C.ink;g.stroke();}
