@@ -101,6 +101,9 @@ button{font:inherit;color:inherit}
   background:color-mix(in srgb,var(--panel) 88%,transparent);border:1px solid var(--line);border-left:3px solid var(--line);border-radius:7px;padding:5px 9px;font-size:11.5px;cursor:pointer;backdrop-filter:blur(6px);opacity:.72}
 .ev-empty{display:block;color:var(--muted);cursor:default}
 .ev.fresh{opacity:1;box-shadow:var(--shadow)}
+.ev.enter{animation:evIn .5s ease-out}
+@keyframes evIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion: reduce){.ev.enter{animation:none}}
 .ev-t{font-family:var(--f-mono);font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums}
 .ev-x{min-width:0}
 .ev-launch{border-left-color:var(--plume)}.ev-task,.ev-retask{border-left-color:var(--gold)}.ev-retask-out,.ev-gap{border-left-color:var(--bad)}
@@ -576,21 +579,36 @@ function setPick(r,bi,pi,pid,qid){
   else{r.theta=0;r.status=B?1:0;}
 }
 // placeholder "smart" picker: optimizes the stereo pair jointly, favors fire-control SVs on glide targets, penalizes handovers
-function simPicks(rec){let pb=-1,pp=-1;
-  rec.forEach(r=>{if(!r)return;const V=r.vis;r.why=null;if(!V.length){r.sim=[-1,-1];pb=pp=-1;return;}
+const HOLD_MIN=120,SWITCH_GAIN=1.2; // calm tasking: minimum hold (s) and required improvement to switch
+function simPicks(rec){let pb=-1,pp=-1,holdK=0;
+  rec.forEach((r,k)=>{if(!r)return;const V=r.vis;r.why=null;if(!V.length){r.sim=[-1,-1];pb=pp=-1;return;}
     const glide=r.phase==='glide'||r.phase==='terminal';
     const parts=v=>({geo:v.qg||0,dwell:v.qd||0,band:0.3*(v.bs||0),fc:glide&&SATS[v.s].layer==='FC'?0.1:0,cont:(v.s===pb||v.s===pp)?0.2:0});
     const qq=v=>{const p=parts(v);return p.geo+p.dwell+p.band+p.fc+p.cont;};
-    let best=-1,second=-1,bi=-1,bj=-1,si=-1,sj=-1;
-    for(let i=0;i<V.length;i++)for(let j=i+1;j<V.length;j++){const a=V[i],b=V[j];
-      const th=Math.acos(Math.max(-1,Math.min(1,a.lx*b.lx+a.ly*b.ly+a.lz*b.lz)));if(th<15*D2R)continue;
-      const sc=Math.sin(th)*(qq(a)+qq(b))/2;
-      if(sc>best){second=best;si=bi;sj=bj;best=sc;bi=i;bj=j;}else if(sc>second){second=sc;si=i;sj=j;}}
-    if(bi<0){const order=V.map((v,i)=>[qq(v),i]).sort((x,y)=>y[0]-x[0]);bi=order[0][1];
-      r.sim=[V[bi].s,-1];r.why={p:parts(V[bi]),q:null,th:0,score:order[0][0],second:order[1]?order[1][0]:0,alt:order[1]?[V[order[1][1]].s,-1]:null,mono:true};}
-    else{let a=V[bi],b=V[bj];if(qq(b)>qq(a))[a,b]=[b,a];r.sim=[a.s,b.s];
-      const th=Math.acos(Math.max(-1,Math.min(1,a.lx*b.lx+a.ly*b.ly+a.lz*b.lz)));
-      r.why={p:parts(a),q:parts(b),th,score:best,second:Math.max(0,second),alt:si>=0?[V[si].s,V[sj].s]:null,mono:false};}
+    const ang=(a,b)=>Math.acos(Math.max(-1,Math.min(1,a.lx*b.lx+a.ly*b.ly+a.lz*b.lz)));
+    const pairs=[];
+    for(let i=0;i<V.length;i++)for(let j=i+1;j<V.length;j++){const th=ang(V[i],V[j]);if(th<15*D2R)continue;pairs.push({a:V[i],b:V[j],th,sc:Math.sin(th)*(qq(V[i])+qq(V[j]))/2});}
+    pairs.sort((x,y)=>y.sc-x.sc);
+    if(pairs.length){
+      const cur=pb>=0&&pp>=0?pairs.find(c=>(c.a.s===pb&&c.b.s===pp)||(c.a.s===pp&&c.b.s===pb)):null;
+      const held=(k-holdK)*DT;let pick;
+      // when the current pair breaks, keep the surviving SV if a pair built around it is close to the best
+      const keepOne=!cur?pairs.find(c=>[c.a.s,c.b.s].some(s=>s>=0&&(s===pb||s===pp))):null;
+      if(cur&&(held<HOLD_MIN||pairs[0].sc<cur.sc*SWITCH_GAIN))pick=cur;
+      else if(keepOne&&pairs[0].sc<keepOne.sc*SWITCH_GAIN){pick=keepOne;holdK=k;}
+      else{pick=pairs[0];if(pick!==cur)holdK=k;}
+      let a=pick.a,b=pick.b;
+      if(b.s===pb||(a.s!==pb&&qq(b)>qq(a)))[a,b]=[b,a];
+      const alt=pairs.find(c=>c!==pick)||null;
+      r.sim=[a.s,b.s];
+      r.why={p:parts(a),q:parts(b),th:pick.th,score:pick.sc,second:alt?alt.sc:0,alt:alt?[alt.a.s,alt.b.s]:null,mono:false,held:pick!==pairs[0]};
+    }else{
+      const order=V.map(v=>[qq(v),v]).sort((x,y)=>y[0]-x[0]);
+      let v=order[0][1];const curV=V.find(x=>x.s===pb);
+      if(curV&&((k-holdK)*DT<HOLD_MIN||order[0][0]<qq(curV)*SWITCH_GAIN))v=curV;else if(v.s!==pb)holdK=k;
+      const alt=order.find(o=>o[1]!==v);
+      r.sim=[v.s,-1];r.why={p:parts(v),q:null,th:0,score:qq(v),second:alt?alt[0]:0,alt:alt?[alt[1].s,-1]:null,mono:true,held:v!==order[0][1]};
+    }
     pb=r.sim[0];pp=r.sim[1];});}
 function lookupPick(arr,t){if(!arr||!arr.length||arr[0].t>t)return null;let lo=0,hi=arr.length-1;
   while(lo<hi){const m=(lo+hi+1)>>1;if(arr[m].t<=t)lo=m;else hi=m-1;}return arr[lo];}
@@ -635,7 +653,9 @@ function buildEvents(){
   EVENTS.sort((a,b)=>a.t-b.t);
 }
 function fireEvents(t0,t1){if(t1<t0||t1-t0>DT*3)return; // only on forward playback, not big scrubs
-  EVENTS.forEach((e,i)=>{if(e.t>t0&&e.t<=t1){if(e.sv>=0&&(e.kind==='task'||e.kind.startsWith('retask')))pulses.push({kind:'sv',s:e.sv,start:performance.now()});
+  const fj=S.focus&&S.focus.kind==='threat'?S.focus.i:-1;
+  EVENTS.forEach(e=>{if(e.t>t0&&e.t<=t1&&(e.j===fj||e.kind==='launch')){
+    if(e.sv>=0&&(e.kind==='task'||e.kind.startsWith('retask')))pulses.push({kind:'sv',s:e.sv,start:performance.now()});
     pulses.push({kind:e.kind,j:e.j,start:performance.now()});}});}
 function fixedBands(r){r.bandP=r.bestV?r.bestV.band0:null;r.bandQ=r.partnerV?r.partnerV.band0:null;r.bandMode='fixed';}
 function applySource(){
@@ -897,12 +917,12 @@ function frame(){
     const s=SATS[i],txt=`${s.id}${p.off?' ↗':''}`;label(g,txt,p[0]+9,p[1]+4,kind==='b'?C['gold-ink']:C.blue,11,true);
     const band=kind==='b'?rec.bandP:rec.bandQ;if(band)bandChip(g,band,p[0]+13+g.measureText(txt).width,p[1]+4);});}
   // event pulses (expanding rings)
-  const nowP=performance.now();pulses=pulses.filter(pl=>nowP-pl.start<1400);
-  pulses.forEach(pl=>{const f=(nowP-pl.start)/1400;let x,y,col;
+  const nowP=performance.now();pulses=pulses.filter(pl=>nowP-pl.start<2000);
+  pulses.forEach(pl=>{const f=(nowP-pl.start)/2000;let x,y,col;
     if(pl.kind==='sv'||pl.kind==='out'){const p=edgeClamp(satScr[pl.s]);if(!p)return;x=p[0];y=p[1];col=pl.kind==='out'?C.bad:C.gold;}
     else{const st=threatState(THREATS[pl.j],t);if(!st)return;proj(st.p[0],st.p[1],st.p[2],P);if(P[3])return;x=P[0];y=P[1];
       col={launch:C.plume,phase:C.blue,maneuver:C.hgv,gap:C.bad,regain:C.ok,impact:C.muted}[pl.kind]||C.gold;}
-    g.globalAlpha=1-f;g.strokeStyle=col;g.lineWidth=2.5*(1-f)+0.5;g.beginPath();g.arc(x,y,6+f*28,0,Math.PI*2);g.stroke();g.globalAlpha=1;});
+    g.globalAlpha=0.55*(1-f)*(1-f);g.strokeStyle=col;g.lineWidth=1.5;g.beginPath();g.arc(x,y,8+f*18,0,Math.PI*2);g.stroke();g.globalAlpha=1;});
   updateUI(k);
 }
 function edgeClamp(p,mark){if(!p||p[3])return null;const m=14;
@@ -920,11 +940,11 @@ function label(g,txt,x,y,col,size,bold){g.font=`${bold?600:500} ${size}px "IBM P
 /* ---------- side panels ---------- */
 const STATUS_TXT=['Custody gap','Mono custody','Stereo custody'];
 function pill(r,th){return r?`<span class="pill s${r.status}">${STATUS_TXT[r.status]}</span>`:`<span class="pill sx">${th&&S.t>=th.tEnd?'Impacted':'Pre-launch'}</span>`;}
-let lastUI=0;
+let lastUI=0,lastFocusHtml='',lastFeedKey='';
 function updateUI(k){
   $('#clock').textContent=(S.t>=DUR&&!S.playing?'End · ':'')+'T+'+fmtT(S.t);
   if(!scrubbing)$('#scrub').value=Math.round(S.t/DUR*1000);
-  const now=performance.now();if(now-lastUI<180)return;lastUI=now;
+  const now=performance.now();if(now-lastUI<450)return;lastUI=now;
   // focus card
   const f=S.focus,r=focusRec(k);let html='';
   if(f){
@@ -940,23 +960,24 @@ function updateUI(k){
         <dt>Phase</dt><dd>${PHASE_LABEL[st?st.phase:'watch']}${st?` · ${fmtN(st.h)} km alt`:''}</dd>
         <dt>SVs in view</dt><dd><b>${r.vis.length}</b> ${layerMix(r.vis)}</dd>
         <dt>Custody pick <span class="src-tag">${{base:'baseline',sim:'simulated',file:'CS2C',none:'baseline · no CS2C pick'}[r.picked]||''}</span></dt><dd class="best"><b>${bs?bs.id:(r.pickId||'—')}</b>${bs?` · ${LAYER_NAME[bs.layer]}`:''} ${bandHtml(r.bandP)}${r.best!==-1&&!r.pickInView?' <span class="warn">not in view</span>':''}</dd>
-        ${MODEL.src!=='base'&&r.b&&r.b.best!==r.best?`<dt>Baseline pick</dt><dd><b>${r.b.best>=0?SATS[r.b.best].id:'—'}</b></dd>`:''}
-        ${B?`<dt>Range · elevation</dt><dd>${fmtN(B.R)} km · ${Math.round(Math.asin(Math.max(-1,Math.min(1,B.se)))*R2D)}°</dd>
-        <dt>Remaining dwell</dt><dd>${B.dw>=600?'> 10 min':fmtDur(B.dw)}</dd>`:''}
+        ${MODEL.src!=='base'?`<dt>Baseline pick</dt><dd>${r.b&&r.b.best>=0?(r.b.best===r.best?'<span class="src-tag">same</span>':`<b>${SATS[r.b.best].id}</b>`):'—'}</dd>`:''}
+        <dt>Range · elevation</dt><dd>${B?`${fmtN(Math.round(B.R/100)*100)} km · ${Math.round(Math.asin(Math.max(-1,Math.min(1,B.se)))*R2D/5)*5}°`:'—'}</dd>
+        <dt>Remaining dwell</dt><dd>${B?(B.dw>=600?'> 10 min':B.dw>=60?`~${Math.round(B.dw/60)} min`:'< 1 min'):'—'}</dd>
         <dt>Stereo partner</dt><dd class="pair"><b>${ps?ps.id:(r.partnerId||'—')}</b>${ps?` · ${LAYER_NAME[ps.layer]}`:''} ${r.partner!==-1||r.partnerId?bandHtml(r.bandQ):''}${!r.partnerInView?' <span class="warn">not in view</span>':''}</dd>
-        ${B?`<dt>Background</dt><dd>${B.bth?'Earth (below horizon)':'Space (above horizon)'}</dd>
-        <dt>Band tasking</dt><dd>${{fixed:'fixed default',opt:'optimized',model:'CS2C'}[r.bandMode]||'—'}${r.bandMode!=='fixed'&&B&&r.bandP&&r.bandP!==B.band0?` <span class="src-tag">default ${B.band0}</span>`:''}</dd>`:''}
-        <dt>Stereo angle</dt><dd>${r.status===2?Math.round(r.theta*R2D)+'°':r.status===1?'mono · no range':'—'}</dd>
+        ${true?`<dt>Background</dt><dd>${B?(B.bth?'Earth':'Space'):'—'}</dd>
+        <dt>Band tasking</dt><dd>${{fixed:'fixed default',opt:'optimized',model:'CS2C'}[r.bandMode]||'—'}</dd>`:''}
+        <dt>Stereo angle</dt><dd>${r.status===2?Math.round(r.theta*R2D/5)*5+'°':r.status===1?'mono · no range':'—'}</dd>
       </dl>
       ${r.why&&r.picked==='sim'&&isT?whyHtml(r,st):r.picked==='file'&&r.reason?`<div class="why"><div class="why-h">CS2C rationale</div><p class="why-text">${esc(r.reason)}</p></div>`:`<div class="qbar" title="Geometry score of the custody pick"><i style="width:${B?Math.round(B.q*100):0}%"></i></div>`}
       ${isT&&r.best>=0?`<button class="kill" data-kill="${r.best}" title="Simulate a failure of this SV from now on and watch CS2C retask">Knock out ${SATS[r.best].id}</button>`:''}`;
     }
   }else html='<div class="empty">Select a launch site or threat on the globe.</div>';
-  $('#focus').innerHTML=html;
+  if(html!==lastFocusHtml){$('#focus').innerHTML=html;lastFocusHtml=html;}
   // event feed: latest events up to now
   const fj=S.focus&&S.focus.kind==='threat'&&!S.autoFocus?S.focus.i:-1;
-  const evs=[];for(let i=EVENTS.length-1;i>=0&&evs.length<5;i--)if(EVENTS[i].t<=S.t&&(fj<0||EVENTS[i].j===fj))evs.push(EVENTS[i]);
-  $('#feed').innerHTML=evs.length?evs.map((e,n)=>{const th=THREATS[e.j];return`<button class="ev ev-${e.kind}${S.t-e.t<45?' fresh':''}" data-j="${e.j}"><span class="ev-t">T+${fmtT(e.t)}</span><span class="chip ${th.type}">${th.id}</span><span class="ev-x">${esc(e.text)}</span></button>`;}).join(''):'<div class="ev-empty">Launch watch · CS2C events appear here</div>';
+  const evs=[];for(let i=EVENTS.length-1;i>=0&&evs.length<3;i--)if(EVENTS[i].t<=S.t&&(fj<0||EVENTS[i].j===fj))evs.push(EVENTS[i]);
+  const feedKey=evs.map(e=>e.t+'|'+e.j+'|'+e.kind).join(',');if(feedKey!==lastFeedKey){const isNew=lastFeedKey&&evs.length&&!lastFeedKey.startsWith(evs[0].t+'|'+evs[0].j);lastFeedKey=feedKey;
+  $('#feed').innerHTML=evs.length?evs.map((e,n)=>{const th=THREATS[e.j];return`<button class="ev ev-${e.kind}${n===0?' fresh':''}${n===0&&isNew?' enter':''}" data-j="${e.j}"><span class="ev-t">T+${fmtT(e.t)}</span><span class="chip ${th.type}">${th.id}</span><span class="ev-x">${esc(e.text)}</span></button>`;}).join(''):'<div class="ev-empty">Launch watch · CS2C events appear here</div>';}
   $('#outLine').hidden=!OUTAGES.length;$('#outN').textContent=OUTAGES.length?`${OUTAGES.length} SV${OUTAGES.length>1?'s':''} knocked out (${OUTAGES.map(o=>SATS[o.s]?SATS[o.s].id:'?').join(', ')})`:'';
   // rows
   SITES.forEach((s,j)=>{const rr=SITE_REC[j][k],el=document.getElementById('site-'+j);if(!el)return;
@@ -971,18 +992,19 @@ function updateUI(k){
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function rationale(r,st){const w=r.why,B=r.bestV;if(!B)return'';const pc=phaseClass(st?st.phase:'watch'),b=r.bandP;const out=[];
   out.push(pc==='boost'?`${b} on the boost plume`:pc==='mid'?(B.bth?`${b} against an Earth background`:`${b} on a cold RV against space`):pc==='reentry'?`${b} on re-entry heating`:`${b} on the glide body's heating`+(B.bth?' against Earth':' against space'));
-  out.push(w.mono?'mono only: no partner gives 15°+ separation':`${Math.round(w.th*R2D)}° stereo with ${SATS[r.partner].id}${r.bandQ?' ('+r.bandQ+')':''}`);
-  out.push(`${B.dw>=600?'10+ min':fmtDur(B.dw)} of access left`);
+  out.push(w.mono?'mono only: no partner gives 15°+ separation':`${Math.round(w.th*R2D/5)*5}° stereo with ${SATS[r.partner].id}${r.bandQ?' ('+r.bandQ+')':''}`);
+  out.push(`${B.dw>=600?'10+ min':B.dw>=60?'~'+Math.round(B.dw/60)+' min':'under a minute'} of access left`);
   if(w.p.fc>0)out.push('fire-control sensor for the glide target');
-  if(w.p.cont>0)out.push('kept on track to avoid a handover');
+  if(w.p.cont>0)out.push(w.held?'held to avoid an unnecessary handover':'kept on track to avoid a handover');
   return out.join(' · ');}
 function whyHtml(r,st){const w=r.why,rows=[['Geometry',w.p.geo,.65],['Dwell',w.p.dwell,.35],['IR band fit',w.p.band,.3],['Fire-control',w.p.fc,.1],['Continuity',w.p.cont,.2]];
-  const margin=w.score>0?(w.score-w.second)/w.score:0,conf=w.alt?(margin>.15?'High':margin>.05?'Medium':'Low'):'High';
-  const altTxt=w.alt?`${SATS[w.alt[0]].id}${w.alt[1]>=0?' + '+SATS[w.alt[1]].id:''} scored ${Math.round(margin*100)}% lower`:'no alternative in view';
+  const margin=w.score>0?(w.score-w.second)/w.score:0,conf=w.alt?(margin>.15?'High':margin>.05?'Medium':margin>=0?'Low':'Medium'):'High';
+  const altName=w.alt?`${SATS[w.alt[0]].id}${w.alt[1]>=0?' + '+SATS[w.alt[1]].id:''}`:'';
+  const altTxt=!w.alt?'no alternative in view':margin>=0?`${altName} scored ${Math.max(1,Math.round(margin*20)*5)}% lower`:`${altName} scores ${Math.max(1,Math.round(-margin*20)*5)}% higher, below the 20% needed to justify a handover`;
   return `<div class="why"><div class="why-h">Why CS2C chose this <span class="src-tag">simulated</span><span class="conf c-${conf}">${conf} confidence</span></div>
     <p class="why-text">${rationale(r,st)}</p>
-    <div class="why-bars">${rows.map(([n,v,m])=>`<span>${n}</span><i><b style="width:${Math.round(Math.min(1,v/m)*100)}%"></b></i>`).join('')}
-    ${w.mono?'':`<span>Stereo angle</span><i><b class="st" style="width:${Math.round(Math.sin(w.th)*100)}%"></b></i>`}</div>
+    <div class="why-bars">${rows.map(([n,v,m])=>`<span>${n}</span><i><b style="width:${Math.round(Math.min(1,v/m)*10)*10}%"></b></i>`).join('')}
+    ${w.mono?'':`<span>Stereo angle</span><i><b class="st" style="width:${Math.round(Math.sin(w.th)*10)*10}%"></b></i>`}</div>
     <p class="why-alt">Runner-up: ${altTxt}</p></div>`;}
 const bandHtml=b=>b?`<span class="band ${b}">${b}</span>`:'<span class="band none">—</span>';
 function layerMix(vis){const c={};vis.forEach(v=>{const l={LEO:'WFOV',FC:'FC',MEO:'MEO',GEO:'GEO',HEO:'Polar'}[SATS[v.s].layer];c[l]=(c[l]||0)+1;});return Object.keys(c).length?`<span style="color:var(--muted)">(${Object.entries(c).map(([l,n])=>l+' '+n).join(', ')})</span>`:'';}
