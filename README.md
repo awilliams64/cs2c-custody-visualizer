@@ -23,10 +23,6 @@ The page is a single self-contained HTML file (`index.html`) with no build tooli
 - **Event-driven retasking:** an event feed in the right panel logs launches, phase changes (burnout, pull-up, re-entry, terminal dive), HGV cross-range maneuvers, custody loss and regain, and every retask with its cause. Rings pulse on the globe as events fire. **Knock out** the current custody SV to simulate a failure and watch CS2C retask; the outage is not foreseen. Restore it from the Custody selection section.
 - **Selection source:** *Simulated* (default placeholder feed) or *CS2C* (picks loaded from model output). A dashed ring marks the baseline geometry rule's pick wherever it differs.
 
-## Globe shell
-
-`globe-shell/index.html` is a copy of the bare globe and interface from the `globe-shell` branch, published at `/globe-shell/` on GitHub Pages. Rebuild it on that branch and copy its `index.html` here to update it.
-
 ## Controls
 
 | Action | Mouse / touch | Keyboard |
