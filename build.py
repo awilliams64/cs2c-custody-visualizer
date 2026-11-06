@@ -15,7 +15,7 @@ HEAD = """<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="description" content="CS2C Visualizer globe shell: interactive globe and interface base for the Cognitive Sensor Satellite Control (CS2C) visualizer. Unclassified.">
+<meta name="description" content="Globe shell: interactive globe and interface base for new visualizers. Unclassified.">
 <style>
   :root{color-scheme:light}
   body{margin:0;font:14px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif}

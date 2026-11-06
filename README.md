@@ -1,8 +1,8 @@
-# CS2C Visualizer · Globe Shell
+# Globe Shell
 
 **UNCLASSIFIED · Prototype**
 
-This branch (`globe-shell`) is the bare globe and interface from the CS2C Custody Visualizer, with all scenario content removed: no satellites, threats, custody logic, IR bands, event feed or CS2C file loading. Use it as a clean base for new views. The full visualizer lives on `main`.
+This branch (`globe-shell`) is a bare interactive globe and interface with no scenario content. Use it as a clean base for new views. The full visualizer lives on `main`.
 
 The page is a single self-contained HTML file (`index.html`) with no server required. Open it in a browser, or serve it with GitHub Pages.
 
