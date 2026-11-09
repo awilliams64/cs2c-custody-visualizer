@@ -1,0 +1,10 @@
+export const RE = 6371;            // Earth radius, km
+export const MU = 398600.4418;     // Earth GM, km^3/s^2
+export const WE = 7.2921159e-5;    // Earth rotation rate, rad/s
+export const D2R = Math.PI / 180;
+export const R2D = 180 / Math.PI;
+export const DT = 10;              // simulation step, s
+export const FIRST_LAUNCH = 120;   // quiet launch watch before the first launch, s
+export const HOLD_MIN = 120;       // simulated tasking: minimum hold before a voluntary handover, s
+export const SWITCH_GAIN = 1.2;    // simulated tasking: improvement needed to justify a handover
+export const MIN_STEREO = 15 * D2R;

@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cs2c-bridge"
+version = "0.1.0"
+description = "Connects a CS2C custody model (Python) to the CS2C Custody Visualizer: live over WebSocket or offline via JSON files."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = ["websockets>=12"]
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[project.scripts]
+cs2c-bridge = "cs2c_bridge.server:main"
+cs2c-batch = "cs2c_bridge.batch:main"
+
+[tool.setuptools]
+packages = ["cs2c_bridge"]
