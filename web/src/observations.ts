@@ -26,7 +26,8 @@ function targetObs(name: string, kind: 'site' | 'threat', r: StepRec, pos: [numb
     target: name, kind, phase: r.phase, lat: r3(pos[0]), lon: r3(pos[1]), alt_km: r1(Math.max(0, pos[2])),
     // visualizer's notional IPP assessment; CS2C may use it or apply its own prioritization
     ...(r.assess ? { assessment: { priority: r.assess.priority, ipp_lat: r3(r.assess.ippLat), ipp_lon: r3(r.assess.ippLon), radius_km: Math.round(r.assess.radiusKm),
-      nearest_defended: r.assess.nearest, distance_km: Math.round(r.assess.nearestKm), reliable: r.assess.reliable } } : {}),
+      nearest_defended: r.assess.nearest, distance_km: Math.round(r.assess.nearestKm), reliable: r.assess.reliable,
+      track_value: r.assess.value, type_class: r.assess.typeClass, type_weight: r.assess.typeWeight, location_class: r.assess.locClass, location_weight: r.assess.locWeight } } : {}),
     candidates: r.vis.map(v => {
       const sv = sim.sats[v.s];
       return {

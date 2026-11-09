@@ -116,7 +116,7 @@
   <div class="big">
     <p class="intro" id="bigIntro">Against this salvo, the simulated feed holds stereo custody for</p>
     <div class="n" id="bigN">–</div>
-    <div class="u">of threat flight time</div>
+    <div class="u">of total track value</div>
     <div class="s" id="bigS">computing…</div>
   </div>
 
@@ -160,7 +160,7 @@
         <tr><td>Glide · Earth</td><td>0.5</td><td>0.9</td><td>0.4</td></tr>
       </table>
       <p>The simulated feed chooses band and geometry together; the baseline leaves every SV on its default band.</p>
-      <p><b>Prioritization</b> (notional). Each threat carries a predicted impact point (IPP) whose uncertainty is about 2,500 km in boost and shrinks after burnout; HGVs stay unpredictable until the terminal dive. A threat is <b>High</b> priority while its uncertainty comes within 300 km of a defended area, <b>Medium</b> within another 500 km, and <b>Low</b> beyond that. The simulated feed tasks High first and watches a Low threat with one SV, preferably one already tasked, releasing the stereo pair. Stereo custody in the summary counts only threats that are not Low.</p>
+      <p><b>Track value</b> (notional). Each threat has a value V(q) = threat-type weight × impact-location weight. Type: HGV 1.0 (constant altitude, high speed, divert capability), ICBM 0.8, shorter-range ballistic 0.75. Location: CONUS 1.0, other US territory 0.85, allied 0.75, open ocean 0.1. The location comes from a predicted impact point (IPP) whose uncertainty is about 2,500 km in boost and shrinks after burnout (HGVs stay unpredictable until the dive): full weight while the uncertainty comes within 300 km of a defended area, 60% within another 500 km, open ocean beyond that. The simulated feed gives the highest-value threats first claim on SVs and watches an open-ocean RV with one SV, preferably one already tasked. The headline is stereo custody weighted by track value, the term the CS2C objective maximizes.</p>
       <p><b>Custody</b> pairs the best SV with the partner that maximizes sin(stereo angle) × quality. Stereo needs at least 15° between lines of sight. Fire-control (FC) SVs have longer notional reach against dim glide vehicles, standing in for the medium field of view sensors. One SV is mono custody (angles only, no range). No SV is a gap.</p>
     </div>
   </details>

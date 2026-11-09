@@ -56,6 +56,21 @@ export const OCEAN_IMPACT: Record<string, Place> = {
   cn: ['Philippine Sea', 28.0, 137.0],
   ru: ['North Atlantic', 52.0, -35.0],
 };
+/**
+ * Track value V(q) = threat-type weight x impact-location weight (notional, per the CS2C prioritization schema):
+ * HGVs above ballistic RVs (constant altitude, high speed, divert capability); CONUS above other US territory,
+ * then allied areas; open-ocean impacts near zero.
+ */
+export const TYPE_WEIGHT = { hgv: 1.0, icbm: 0.8, ballistic: 0.75 } as const;
+export const LOCATION_CLASS: Record<string, 'CONUS' | 'US territory' | 'Allied'> = {
+  Seattle: 'CONUS', 'Los Angeles': 'CONUS', Washington: 'CONUS', 'New York': 'CONUS', Chicago: 'CONUS',
+  Guam: 'US territory', Honolulu: 'US territory', Anchorage: 'US territory',
+  'Diego Garcia': 'Allied', Rome: 'Allied', Berlin: 'Allied', London: 'Allied',
+};
+export const LOCATION_WEIGHT = { CONUS: 1.0, 'US territory': 0.85, Allied: 0.75, 'open ocean': 0.1 } as const;
+/** How much of the location weight applies while the IPP may or may not reach it. */
+export const REACH_FACTOR = { High: 1, Medium: 0.6, Low: 0 } as const;
+
 /** A threat is High priority if its impact uncertainty comes within this distance of a defended area (km). */
 export const DEFENDED_RADIUS_KM = 300;
 /** Below High and within this extra margin it is Medium; beyond it, Low (km). */

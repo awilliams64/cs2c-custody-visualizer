@@ -57,6 +57,8 @@ export type Priority = 'High' | 'Medium' | 'Low';
 export interface Assessment {
   priority: Priority; ippLat: number; ippLon: number; radiusKm: number;
   nearest: string; nearestKm: number; reliable: boolean;
+  /** Track value V(q) in 0..1 = threat-type weight x impact-location weight (notional). */
+  value: number; typeWeight: number; locWeight: number; typeClass: string; locClass: string;
 }
 
 export interface StepRec {
@@ -81,6 +83,8 @@ export interface Summary {
   gapThreats: number; longest: number; maxV: number;
   /** Threats demoted to Low priority at some point, and SV-minutes freed versus a dedicated stereo pair. */
   deprioritized: number; svMinFreed: number;
+  /** Stereo custody weighted by track value: sum(V * stereo) / sum(V) over threat-steps. */
+  valueStereo: number;
 }
 
 export type EventKind = 'launch' | 'task' | 'phase' | 'maneuver' | 'priority' | 'retask' | 'retask-out' | 'gap' | 'regain' | 'impact';

@@ -46,6 +46,11 @@ class Target:
     def priority(self) -> str:
         return str((self.assessment or {}).get("priority", "High"))
 
+    @property
+    def track_value(self) -> float:
+        """V(q) in 0..1 = type weight x impact-location weight (1.0 if the visualizer sent no assessment)."""
+        return float((self.assessment or {}).get("track_value", 1.0))
+
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "Target":
         return cls(target=str(d["target"]), kind=str(d.get("kind", "threat")), phase=str(d.get("phase", "")),

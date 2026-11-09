@@ -93,3 +93,10 @@ def test_low_priority_target_gets_single_monitor_sv():
     obs["targets"] = [dict(OBS["targets"][0], assessment={"priority": "Low", "nearest_defended": "Guam", "distance_km": 2400})]
     p = DemoModel().select(Observation.from_dict(obs))[0]
     assert p.partner is None and "Low priority" in p.reason
+
+
+def test_track_value_defaults_and_reads_assessment():
+    t = Observation.from_dict(OBS).targets[0]
+    assert t.track_value == 1.0
+    obs = dict(OBS); obs["targets"] = [dict(OBS["targets"][0], assessment={"priority": "High", "track_value": 0.64})]
+    assert Observation.from_dict(obs).targets[0].track_value == 0.64

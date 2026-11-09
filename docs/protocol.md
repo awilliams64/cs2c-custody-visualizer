@@ -37,7 +37,9 @@ The visualizer connects to `ws://localhost:8765` (configurable) when you press *
   "targets": [ {
     "target": "B-01", "kind": "threat", "phase": "mid", "lat": 31.2, "lon": 135.8, "alt_km": 805,
     "assessment": { "priority": "High", "ipp_lat": 13.6, "ipp_lon": 144.9, "radius_km": 180,
-                    "nearest_defended": "Guam", "distance_km": 20, "reliable": true },
+                    "nearest_defended": "Guam", "distance_km": 20, "reliable": true,
+                    "track_value": 0.64, "type_class": "ballistic missile", "type_weight": 0.75,
+                    "location_class": "US territory", "location_weight": 0.85 },
     "candidates": [ {
       "sv": "E1-0103", "layer": "MEO", "range_km": 7612, "elevation_deg": 64.8, "background": "earth",
       "los": [0.4121, 0.6232, 0.6648], "access_s": 300,
@@ -50,7 +52,7 @@ The visualizer connects to `ws://localhost:8765` (configurable) when you press *
 - `access_s` is predicted remaining access from orbit propagation.
 - `background`: `space` (target seen above the horizon) or `earth`.
 - `band_fit`: notional suitability 0–1 for each band that SV carries.
-- `assessment` (threats only): the visualizer's notional predicted-impact-point (IPP) estimate. `priority` is `High` while the uncertainty `radius_km` comes within 300 km of a defended area, `Medium` within a further 500 km, `Low` beyond. `reliable` is false in boost and for gliding HGVs. CS2C may use it or apply its own prioritization; in Python it is `target.assessment` and `target.priority`.
+- `assessment` (threats only): the visualizer's notional predicted-impact-point (IPP) estimate. `priority` is `High` while the uncertainty `radius_km` comes within 300 km of a defended area, `Medium` within a further 500 km, `Low` beyond. `reliable` is false in boost and for gliding HGVs. `track_value` is V(q) = `type_weight` × `location_weight` (HGV 1.0, ICBM 0.8, other ballistic 0.75; CONUS 1.0, US territory 0.85, allied 0.75, open ocean 0.1), the V(q_k) term of the CS2C objective. CS2C may use it or apply its own prioritization; in Python it is `target.assessment`, `target.priority` and `target.track_value`.
 
 ### `picks`
 ```json

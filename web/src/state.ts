@@ -19,7 +19,7 @@ export const sim = {
   dur: 0, nstep: 0,
   siteRec: [] as Track[], thrRec: [] as Track[],
   stats: [] as (StepStat | null)[],
-  summary: { stereo: 0, avgV: 0, agree: 1, tasked: 0, slots: 0, fit: 0, fit0: 0, gapThreats: 0, longest: 0, maxV: 1, deprioritized: 0, svMinFreed: 0 } as Summary,
+  summary: { stereo: 0, avgV: 0, agree: 1, tasked: 0, slots: 0, fit: 0, fit0: 0, gapThreats: 0, longest: 0, maxV: 1, deprioritized: 0, svMinFreed: 0, valueStereo: 0 } as Summary,
   stepTask: [] as ({ svs: number; picks: number } | undefined)[],
   events: [] as SimEvent[], outages: [] as Outage[], pulses: [] as Pulse[],
 };

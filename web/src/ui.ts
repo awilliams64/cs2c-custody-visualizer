@@ -25,7 +25,12 @@ const isLow = (r: StepRec | null) => !!r && !!r.assess && r.assess.priority === 
 const pill = (r: StepRec | null, th: Threat | null) => r
   ? (isLow(r) && r.status > 0 ? '<span class="pill sl">Monitor</span>' : `<span class="pill s${r.status}">${STATUS_TXT[r.status]}</span>`)
   : `<span class="pill sx">${th && S.t >= th.tEnd ? 'Impacted' : 'Pre-launch'}</span>`;
-const prioHtml = (r: StepRec | null) => r && r.assess ? `<span class="prio p-${r.assess.priority}">${r.assess.priority}</span>` : '';
+const prioHtml = (r: StepRec | null) => r && r.assess ? `<span class="prio p-${r.assess.priority}">V ${r.assess.value.toFixed(2)}</span>` : '';
+/** Track value with its breakdown: V(q) = type weight x location weight. */
+function valueHtml(r: StepRec): string {
+  const a = r.assess!;
+  return `<span class="prio p-${a.priority}">${a.value.toFixed(2)}</span> <span class="src-tag">${a.typeClass} ${a.typeWeight.toFixed(2)} × ${a.locClass} ${a.locWeight.toFixed(2)}</span>`;
+}
 /** Where a threat is going, as far as the assessment can tell: errant RVs read "IPP refining" until cleared. */
 function dest(th: Threat, r: StepRec | null): string {
   if (!th.errant) return th.target;
@@ -48,9 +53,10 @@ const minutes = (dw: number, long: string, short: string) => dw >= 600 ? long : 
 function rationale(r: StepRec, st: ThreatState | null): string {
   const w = r.why!, B = r.bestV; if (!B) return '';
   const pc = phaseClass(st ? st.phase : 'watch'), b = r.bandP, out: string[] = [];
+  if (r.assess && !w.monitor) out.push(`track value ${r.assess.value.toFixed(2)} (${r.assess.typeClass} → ${r.assess.locClass === 'open ocean' ? 'open ocean' : r.assess.nearest})`);
   if (w.monitor && r.assess) {
     const a = r.assess;
-    out.push(`deprioritized: predicted impact ${a.nearestKm > 1500 ? 'in open ocean, ' : ''}~${round(a.nearestKm, 100)} km from ${a.nearest}, clear of every defended area`);
+    out.push(`deprioritized to value ${a.value.toFixed(2)}: predicted impact ${a.nearestKm > 1500 ? 'in open ocean, ' : ''}~${round(a.nearestKm, 100)} km from ${a.nearest}, clear of every defended area`);
     out.push(`watched by one SV${r.shareP.length ? ` already tasked for ${r.shareP.slice(0, 3).map(j => sim.threats[j].id).join(', ')}` : ''} in ${b}`);
     out.push('stereo pair released to higher-priority threats');
     return out.join(' · ');
@@ -101,7 +107,7 @@ function focusHtml(k: number): string {
   const pickTag = ({ base: 'baseline', sim: 'simulated', file: 'CS2C', none: 'baseline · no CS2C pick' } as const)[r.picked];
   html += `<dl class="kv">
     <dt>Phase</dt><dd>${PHASE_LABEL[st ? st.phase : 'watch']}${st ? ` · ${fmtN(st.h)} km alt` : ''}</dd>
-    ${th && r.assess ? `<dt>Priority</dt><dd>${prioHtml(r)}</dd><dt>Predicted impact</dt><dd>${ippText(th, r)}</dd>` : ''}
+    ${th && r.assess ? `<dt>Track value</dt><dd>${valueHtml(r)}</dd><dt>Predicted impact</dt><dd>${ippText(th, r)}</dd>` : ''}
     <dt>SVs in view</dt><dd><b>${r.vis.length}</b> ${layerMix(r.vis)}</dd>
     <dt>Custody pick <span class="src-tag">${pickTag}</span></dt><dd class="best"><b>${bs ? bs.id : esc(r.pickId || '—')}</b>${bs ? ` · ${LAYER_NAME[bs.layer]}` : ''} ${bandHtml(r.bandP)}${r.best !== -1 && !r.pickInView ? ' <span class="warn">not in view</span>' : ''}</dd>
     ${MODEL.src !== 'base' ? `<dt>Baseline pick</dt><dd>${r.b.best >= 0 ? (r.b.best === r.best ? '<span class="src-tag">same</span>' : `<b>${sim.sats[r.b.best].id}</b>`) : '—'}</dd>` : ''}
@@ -163,7 +169,7 @@ export function updateUI(k: number, scrubbing: boolean): void {
     const rr = sim.thrRec[j][k], el = document.getElementById('thr-' + j); if (!el) return;
     const st = threatState(th, S.t);
     el.querySelector('.rt')!.innerHTML = `${th.siteName} → ${dest(th, rr)} <small>${st ? PHASE_LABEL[st.phase] + ' · ' + (rr ? rr.vis.length : 0) + ' SVs' : S.t < th.tL ? 'T+' + fmtT(th.tL) : 'impact'}</small>`;
-    el.querySelector('.st')!.innerHTML = (st && rr && rr.assess && rr.assess.priority !== 'High' ? prioHtml(rr) + ' ' : '') + (st && rr && rr.bandP ? bandHtml(rr.bandP) + ' ' : '') + pill(rr, th);
+    el.querySelector('.st')!.innerHTML = (st && rr && rr.assess ? prioHtml(rr) + ' ' : '') + (st && rr && rr.bandP ? bandHtml(rr.bandP) + ' ' : '') + pill(rr, th);
     el.setAttribute('aria-pressed', String(!!f && f.kind === 'threat' && f.i === j));
   });
   drawChartCursor(); drawStrips();
@@ -187,11 +193,11 @@ export function updateArchPanel(): void {
 
 export function refreshSummary(): void {
   const sm = sim.summary;
-  $('#bigN').textContent = Math.round(sm.stereo * 100) + '%';
-  $('#bigIntro').textContent = MODEL.src === 'file' && !MODEL.file ? 'No CS2C picks yet, so the baseline rule is shown. It holds stereo custody for' : `Against this salvo, ${SRC_TXT[MODEL.src]} holds stereo custody for`;
-  $('#bigS').textContent = `${sim.sats.length} sensor SVs · avg ${sm.avgV.toFixed(1)} in view · ${sm.gapThreats ? `${sm.gapThreats} threat${sm.gapThreats > 1 ? 's' : ''} with gaps (longest ${fmtDur(sm.longest)})` : 'no custody gaps'}` +
+  $('#bigN').textContent = Math.round(sm.valueStereo * 100) + '%';
+  $('#bigIntro').textContent = MODEL.src === 'file' && !MODEL.file ? 'No CS2C picks yet, so the baseline rule is shown. Weighted by track value, it holds stereo custody of' : `Against this salvo, ${SRC_TXT[MODEL.src]} holds stereo custody of`;
+  $('#bigS').textContent = `stereo on ${Math.round(sm.stereo * 100)}% of threat-time (Low-value excluded) · ${sim.sats.length} sensor SVs · avg ${sm.avgV.toFixed(1)} in view · ${sm.gapThreats ? `${sm.gapThreats} threat${sm.gapThreats > 1 ? 's' : ''} with gaps (longest ${fmtDur(sm.longest)})` : 'no custody gaps'}` +
     (MODEL.src === 'sim' || (MODEL.src === 'file' && MODEL.file) ? ` · same primary as baseline ${Math.round(sm.agree * 100)}% of the time · IR band fit ${Math.round(sm.fit * 100)}% vs ${Math.round(sm.fit0 * 100)}% on fixed default bands${sm.tasked ? ` · shared fields of view: avg ${sm.tasked.toFixed(1)} SVs tasked for ${sm.slots.toFixed(1)} custody slots` : ''}` : '')
-    + (sm.deprioritized ? ` · ${sm.deprioritized} RV deprioritized (impact clear of defended areas)${MODEL.src === 'sim' ? `, freeing ~${Math.round(sm.svMinFreed)} SV-minutes` : ''}; stereo custody counts the threats that still matter` : '');
+    + (sm.deprioritized ? ` · ${sm.deprioritized} RV deprioritized (impact clear of defended areas)${MODEL.src === 'sim' ? `, freeing ~${Math.round(sm.svMinFreed)} SV-minutes` : ''}` : '');
   if (MODEL.src === 'file') $('#fileStatus').innerHTML = fileStatusText();
   lastUI = 0; drawChart();
 }

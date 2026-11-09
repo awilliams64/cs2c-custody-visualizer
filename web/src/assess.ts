@@ -1,6 +1,6 @@
 // Threat assessment: predicted impact point (IPP) with shrinking uncertainty, and a tasking priority.
 // Notional: the uncertainty model stands in for a real IPP estimator fed by the tracks.
-import { DEFENDED_RADIUS_KM, MEDIUM_MARGIN_KM, REGIONS } from './config';
+import { DEFENDED_RADIUS_KM, LOCATION_CLASS, LOCATION_WEIGHT, MEDIUM_MARGIN_KM, REACH_FACTOR, REGIONS, TYPE_WEIGHT } from './config';
 import { D2R, DT, RE } from './constants';
 import { S, sim } from './state';
 import type { Assessment, Priority, Threat } from './types';
@@ -39,10 +39,19 @@ export function assessThreats(): void {
       let priority: Priority = margin < DEFENDED_RADIUS_KM ? 'High' : margin < DEFENDED_RADIUS_KM + MEDIUM_MARGIN_KM ? 'Medium' : 'Low';
       if (prev === 'Low' && priority === 'Medium') priority = 'Low'; // hysteresis: once cleared, stay cleared unless it could hit
       prev = priority;
-      const a: Assessment = { priority, ippLat, ippLon, radiusKm: radius, nearest, nearestKm, reliable };
+      // track value V(q): type weight x location weight; an RV clear of every defended area is valued as an open-ocean event
+      const typeClass = th.type === 'H' ? 'HGV' : th.D > 5500 ? 'ICBM' : 'ballistic missile';
+      const typeWeight = th.type === 'H' ? TYPE_WEIGHT.hgv : th.D > 5500 ? TYPE_WEIGHT.icbm : TYPE_WEIGHT.ballistic;
+      const cls = LOCATION_CLASS[nearest] || 'Allied';
+      const locClass = priority === 'Low' ? 'open ocean' : cls;
+      const locWeight = Math.max(LOCATION_WEIGHT['open ocean'], LOCATION_WEIGHT[cls] * REACH_FACTOR[priority]);
+      const value = Math.round(typeWeight * locWeight * 100) / 100;
+      const a: Assessment = { priority, ippLat, ippLon, radiusKm: radius, nearest, nearestKm, reliable, value, typeWeight, locWeight, typeClass, locClass };
       r.assess = a;
     });
   });
 }
 
 export const PRIORITY_RANK: Record<Priority, number> = { High: 0, Medium: 1, Low: 2 };
+/** Track value of a threat at a step (0 when unassessed). */
+export const trackValue = (r: { assess: Assessment | null } | null | undefined) => r && r.assess ? r.assess.value : 0;

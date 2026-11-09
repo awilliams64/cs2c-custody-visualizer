@@ -1,6 +1,6 @@
 // Custody selection: baseline rule, simulated CS2C feed (joint, multi-target), or picks from CS2C itself.
 import { allTracks, selectGeometry } from './access';
-import { PRIORITY_RANK } from './assess';
+import { trackValue } from './assess';
 import { BANDS, FOV_HALF, bandSuit, phaseClass } from './config';
 import { DT, D2R, HOLD_MIN, MIN_STEREO, SWITCH_GAIN } from './constants';
 import { buildEvents } from './events';
@@ -118,9 +118,9 @@ function simJoint(): void {
   type Slot = { j: number; lx: number; ly: number; lz: number; band: Band };
   for (let k = 0; k < sim.nstep; k++) {
     const asg = new Map<number, Slot[]>(); let picks = 0;
-    // higher priority first; within a priority, incumbents first so a held pair is not squeezed out by a newer threat
-    const rank = (j: number) => { const r = sim.thrRec[j][k]; return r && r.assess ? PRIORITY_RANK[r.assess.priority] : 0; };
-    const ord = order.slice().sort((a, b) => rank(a) - rank(b) || Number(holds[b].pb >= 0) - Number(holds[a].pb >= 0));
+    // highest track value V(q) first (it gets first claim on SVs); ties go to incumbents so a held pair is not squeezed out
+    const val = (j: number) => trackValue(sim.thrRec[j][k]);
+    const ord = order.slice().sort((a, b) => val(b) - val(a) || Number(holds[b].pb >= 0) - Number(holds[a].pb >= 0));
     ord.forEach(j => {
       const r = sim.thrRec[j][k], s = holds[j];
       if (!r) { s.pb = s.pp = -1; return; }
@@ -196,6 +196,7 @@ export function computeStats(): void {
   sim.stats = [];
   let act = 0, st2 = 0, sumV = 0, agree = 0, fit = 0, fit0 = 0, nfit = 0, tSv = 0, tPk = 0, tN = 0, actPrio = 0, st2Prio = 0, freed = 0;
   const demoted = new Set<number>();
+  let vSum = 0, vStereo = 0;
   const gapRuns = sim.threats.map(() => ({ cur: 0, max: 0, any: false }));
   for (let k = 0; k < sim.nstep; k++) {
     let mn = Infinity, mx = 0, sm = 0, n = 0; const c: [number, number, number] = [0, 0, 0];
@@ -203,6 +204,7 @@ export function computeStats(): void {
       const r = rec[k]; if (!r) return;
       n++; const v = r.vis.length; mn = Math.min(mn, v); mx = Math.max(mx, v); sm += v; c[r.status]++;
       if (r.best === r.b.best) agree++;
+      const tv = trackValue(r); vSum += tv; if (r.status === 2) vStereo += tv;
       const low = !!r.assess && r.assess.priority === 'Low';
       if (low) { demoted.add(j); if (MODEL.src === 'sim') freed += (2 - (r.best >= 0 && !r.shareP.length ? 1 : 0)) * DT / 60; }
       else { actPrio++; if (r.status === 2) st2Prio++; }
@@ -219,7 +221,7 @@ export function computeStats(): void {
     // stereo custody is scored over threats that still matter: Low-priority (ocean-impact) RVs are monitored, not tracked in stereo
     stereo: actPrio ? st2Prio / actPrio : (act ? st2 / act : 0), avgV: act ? sumV / act : 0, agree: act ? agree / act : 1,
     tasked: tN ? tSv / tN : 0, slots: tN ? tPk / tN : 0, fit: nfit ? fit / nfit : 0, fit0: nfit ? fit0 / nfit : 0,
-    deprioritized: demoted.size, svMinFreed: freed,
+    deprioritized: demoted.size, svMinFreed: freed, valueStereo: vSum ? vStereo / vSum : 0,
     gapThreats: gapRuns.filter(g => g.any).length, longest: Math.max(0, ...gapRuns.map(g => g.max)),
     maxV: Math.max(1, ...sim.stats.filter((s): s is NonNullable<typeof s> => !!s).map(s => s.max)),
   };
