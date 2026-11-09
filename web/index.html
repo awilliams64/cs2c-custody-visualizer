@@ -62,6 +62,7 @@
     <div class="seg" id="salvo"></div>
     <div class="lbl">Re-entry vehicle mix</div>
     <div class="seg" id="mix"></div>
+    <label class="chk"><input type="checkbox" id="errant" checked> One RV falls short into the ocean <span style="color:var(--muted);font-size:10.5px">(salvos of 5+)</span></label>
   </div>
 
   <details class="sec" id="arch">
@@ -159,6 +160,7 @@
         <tr><td>Glide · Earth</td><td>0.5</td><td>0.9</td><td>0.4</td></tr>
       </table>
       <p>The simulated feed chooses band and geometry together; the baseline leaves every SV on its default band.</p>
+      <p><b>Prioritization</b> (notional). Each threat carries a predicted impact point (IPP) whose uncertainty is about 2,500 km in boost and shrinks after burnout; HGVs stay unpredictable until the terminal dive. A threat is <b>High</b> priority while its uncertainty comes within 300 km of a defended area, <b>Medium</b> within another 500 km, and <b>Low</b> beyond that. The simulated feed tasks High first and watches a Low threat with one SV, preferably one already tasked, releasing the stereo pair. Stereo custody in the summary counts only threats that are not Low.</p>
       <p><b>Custody</b> pairs the best SV with the partner that maximizes sin(stereo angle) × quality. Stereo needs at least 15° between lines of sight. Fire-control (FC) SVs have longer notional reach against dim glide vehicles, standing in for the medium field of view sensors. One SV is mono custody (angles only, no range). No SV is a gap.</p>
     </div>
   </details>

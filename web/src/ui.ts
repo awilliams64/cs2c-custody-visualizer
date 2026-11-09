@@ -21,9 +21,22 @@ const SRC_NOTE: Record<Source, string> = {
 let lastUI = 0, lastFocusHtml = '', lastFeedKey = '';
 export const forceUI = () => { lastUI = 0; };
 
+const isLow = (r: StepRec | null) => !!r && !!r.assess && r.assess.priority === 'Low';
 const pill = (r: StepRec | null, th: Threat | null) => r
-  ? `<span class="pill s${r.status}">${STATUS_TXT[r.status]}</span>`
+  ? (isLow(r) && r.status > 0 ? '<span class="pill sl">Monitor</span>' : `<span class="pill s${r.status}">${STATUS_TXT[r.status]}</span>`)
   : `<span class="pill sx">${th && S.t >= th.tEnd ? 'Impacted' : 'Pre-launch'}</span>`;
+const prioHtml = (r: StepRec | null) => r && r.assess ? `<span class="prio p-${r.assess.priority}">${r.assess.priority}</span>` : '';
+/** Where a threat is going, as far as the assessment can tell: errant RVs read "IPP refining" until cleared. */
+function dest(th: Threat, r: StepRec | null): string {
+  if (!th.errant) return th.target;
+  return isLow(r) || S.t >= th.tEnd ? `open ocean (${th.impactName})` : 'IPP refining';
+}
+const round = (km: number, to: number) => fmtN(Math.round(km / to) * to);
+function ippText(th: Threat, r: StepRec): string {
+  const a = r.assess!;
+  if (!a.reliable) return th.type === 'H' && r.phase !== 'boost' ? 'maneuvering, IPP not reliable' : 'boosting, IPP not yet reliable';
+  return `~${round(a.nearestKm, 100)} km from ${a.nearest} ±${round(a.radiusKm, 10)} km`;
+}
 const bandHtml = (b: Band | null) => b ? `<span class="band ${b}">${b}</span>` : '<span class="band none">—</span>';
 function layerMix(vis: Vis[]): string {
   const c: Record<string, number> = {};
@@ -35,6 +48,13 @@ const minutes = (dw: number, long: string, short: string) => dw >= 600 ? long : 
 function rationale(r: StepRec, st: ThreatState | null): string {
   const w = r.why!, B = r.bestV; if (!B) return '';
   const pc = phaseClass(st ? st.phase : 'watch'), b = r.bandP, out: string[] = [];
+  if (w.monitor && r.assess) {
+    const a = r.assess;
+    out.push(`deprioritized: predicted impact ${a.nearestKm > 1500 ? 'in open ocean, ' : ''}~${round(a.nearestKm, 100)} km from ${a.nearest}, clear of every defended area`);
+    out.push(`watched by one SV${r.shareP.length ? ` already tasked for ${r.shareP.slice(0, 3).map(j => sim.threats[j].id).join(', ')}` : ''} in ${b}`);
+    out.push('stereo pair released to higher-priority threats');
+    return out.join(' · ');
+  }
   out.push(pc === 'boost' ? `${b} on the boost plume` : pc === 'mid' ? (B.bth ? `${b} against an Earth background` : `${b} on a cold RV against space`)
     : pc === 'reentry' ? `${b} on re-entry heating` : `${b} on the glide body's heating` + (B.bth ? ' against Earth' : ' against space'));
   out.push(w.mono ? 'mono only: no partner gives 15°+ separation' : `${Math.round(w.th * R2D / 5) * 5}° stereo with ${sim.sats[r.partner].id}${r.bandQ ? ' (' + r.bandQ + ')' : ''}`);
@@ -52,11 +72,14 @@ function whyHtml(r: StepRec, st: ThreatState | null): string {
   const w = r.why!;
   const rows: [string, number, number][] = [['Geometry', w.p.geo, 0.65], ['Dwell', w.p.dwell, 0.35], ['IR band fit', w.p.band, 0.3], ['Fire-control', w.p.fc, 0.1], ['Continuity', w.p.cont, 0.2], ['Shared FOV', w.p.share, 0.15]];
   const margin = w.score > 0 ? (w.score - w.second) / w.score : 0;
-  const conf = w.alt ? (margin > 0.15 ? 'High' : margin > 0.05 ? 'Medium' : margin >= 0 ? 'Low' : 'Medium') : 'High';
+  // for a monitored (Low-priority) threat, confidence is about the assessment: how clearly the IPP misses every defended area
+  const clear = r.assess ? (r.assess.nearestKm - r.assess.radiusKm - 300) / Math.max(1, r.assess.nearestKm) : 0;
+  const conf = w.monitor ? (clear > 0.5 ? 'High' : clear > 0.2 ? 'Medium' : 'Low')
+    : w.alt ? (margin > 0.15 ? 'High' : margin > 0.05 ? 'Medium' : margin >= 0 ? 'Low' : 'Medium') : 'High';
   const altName = w.alt ? `${sim.sats[w.alt[0]].id}${w.alt[1] >= 0 ? ' + ' + sim.sats[w.alt[1]].id : ''}` : '';
   const pct = (m: number) => Math.max(1, Math.round(m * 20) * 5);
   const altTxt = !w.alt ? 'no alternative in view' : margin >= 0 ? `${altName} scored ${pct(margin)}% lower` : `${altName} scores ${pct(-margin)}% higher, below the 20% needed to justify a handover`;
-  return `<div class="why"><div class="why-h">Why CS2C chose this <span class="src-tag">simulated</span><span class="conf c-${conf}">${conf} confidence</span></div>
+  return `<div class="why"><div class="why-h">${w.monitor ? 'Why CS2C deprioritized this' : 'Why CS2C chose this'} <span class="src-tag">simulated</span><span class="conf c-${conf}">${conf} confidence</span></div>
     <p class="why-text">${rationale(r, st)}</p>
     <div class="why-bars">${rows.map(([n, v, m]) => `<span>${n}</span><i><b style="width:${Math.round(Math.min(1, v / m) * 10) * 10}%"></b></i>`).join('')}
     ${w.mono ? '' : `<span>Stereo angle</span><i><b class="st" style="width:${Math.round(Math.sin(w.th) * 10) * 10}%"></b></i>`}</div>
@@ -69,7 +92,7 @@ function focusHtml(k: number): string {
   const isT = f.kind === 'threat', th = isT ? sim.threats[f.i] : null, site = isT ? null : sim.sites[f.i];
   const st = th ? threatState(th, S.t) : null;
   const chip = th ? `<span class="chip ${th.type}">${th.id}</span>` : '<span class="chip S">SITE</span>';
-  const title = th ? `${th.type === 'B' ? 'Ballistic RV' : 'Hypersonic glide vehicle'}<small>${th.siteName} → ${th.target} · ${fmtN(th.D)} km</small>`
+  const title = th ? `${th.type === 'B' ? 'Ballistic RV' : 'Hypersonic glide vehicle'}<small>${th.siteName} → ${dest(th, r)}${th.errant && !isLow(r) && S.t < th.tEnd ? '' : ` · ${fmtN(th.D)} km`}</small>`
     : `${site!.name}<small>Launch watch · ${site!.lat.toFixed(2)}°, ${site!.lon.toFixed(2)}°</small>`;
   let html = `<div class="fh">${chip}<div class="name">${title}</div>${pill(r, th)}</div>`;
   if (th && !st) return html + `<dl class="kv"><dt>Status</dt><dd>${S.t < th.tL ? `Launch at T+${fmtT(th.tL)}` : 'Impacted'}</dd></dl>`;
@@ -78,6 +101,7 @@ function focusHtml(k: number): string {
   const pickTag = ({ base: 'baseline', sim: 'simulated', file: 'CS2C', none: 'baseline · no CS2C pick' } as const)[r.picked];
   html += `<dl class="kv">
     <dt>Phase</dt><dd>${PHASE_LABEL[st ? st.phase : 'watch']}${st ? ` · ${fmtN(st.h)} km alt` : ''}</dd>
+    ${th && r.assess ? `<dt>Priority</dt><dd>${prioHtml(r)}</dd><dt>Predicted impact</dt><dd>${ippText(th, r)}</dd>` : ''}
     <dt>SVs in view</dt><dd><b>${r.vis.length}</b> ${layerMix(r.vis)}</dd>
     <dt>Custody pick <span class="src-tag">${pickTag}</span></dt><dd class="best"><b>${bs ? bs.id : esc(r.pickId || '—')}</b>${bs ? ` · ${LAYER_NAME[bs.layer]}` : ''} ${bandHtml(r.bandP)}${r.best !== -1 && !r.pickInView ? ' <span class="warn">not in view</span>' : ''}</dd>
     ${MODEL.src !== 'base' ? `<dt>Baseline pick</dt><dd>${r.b.best >= 0 ? (r.b.best === r.best ? '<span class="src-tag">same</span>' : `<b>${sim.sats[r.b.best].id}</b>`) : '—'}</dd>` : ''}
@@ -138,8 +162,8 @@ export function updateUI(k: number, scrubbing: boolean): void {
   sim.threats.forEach((th, j) => {
     const rr = sim.thrRec[j][k], el = document.getElementById('thr-' + j); if (!el) return;
     const st = threatState(th, S.t);
-    el.querySelector('.rt')!.innerHTML = `${th.siteName} → ${th.target} <small>${st ? PHASE_LABEL[st.phase] + ' · ' + (rr ? rr.vis.length : 0) + ' SVs' : S.t < th.tL ? 'T+' + fmtT(th.tL) : 'impact'}</small>`;
-    el.querySelector('.st')!.innerHTML = (st && rr && rr.bandP ? bandHtml(rr.bandP) + ' ' : '') + pill(rr, th);
+    el.querySelector('.rt')!.innerHTML = `${th.siteName} → ${dest(th, rr)} <small>${st ? PHASE_LABEL[st.phase] + ' · ' + (rr ? rr.vis.length : 0) + ' SVs' : S.t < th.tL ? 'T+' + fmtT(th.tL) : 'impact'}</small>`;
+    el.querySelector('.st')!.innerHTML = (st && rr && rr.assess && rr.assess.priority !== 'High' ? prioHtml(rr) + ' ' : '') + (st && rr && rr.bandP ? bandHtml(rr.bandP) + ' ' : '') + pill(rr, th);
     el.setAttribute('aria-pressed', String(!!f && f.kind === 'threat' && f.i === j));
   });
   drawChartCursor(); drawStrips();
@@ -166,7 +190,8 @@ export function refreshSummary(): void {
   $('#bigN').textContent = Math.round(sm.stereo * 100) + '%';
   $('#bigIntro').textContent = MODEL.src === 'file' && !MODEL.file ? 'No CS2C picks yet, so the baseline rule is shown. It holds stereo custody for' : `Against this salvo, ${SRC_TXT[MODEL.src]} holds stereo custody for`;
   $('#bigS').textContent = `${sim.sats.length} sensor SVs · avg ${sm.avgV.toFixed(1)} in view · ${sm.gapThreats ? `${sm.gapThreats} threat${sm.gapThreats > 1 ? 's' : ''} with gaps (longest ${fmtDur(sm.longest)})` : 'no custody gaps'}` +
-    (MODEL.src === 'sim' || (MODEL.src === 'file' && MODEL.file) ? ` · same primary as baseline ${Math.round(sm.agree * 100)}% of the time · IR band fit ${Math.round(sm.fit * 100)}% vs ${Math.round(sm.fit0 * 100)}% on fixed default bands${sm.tasked ? ` · shared fields of view: avg ${sm.tasked.toFixed(1)} SVs tasked for ${sm.slots.toFixed(1)} custody slots` : ''}` : '');
+    (MODEL.src === 'sim' || (MODEL.src === 'file' && MODEL.file) ? ` · same primary as baseline ${Math.round(sm.agree * 100)}% of the time · IR band fit ${Math.round(sm.fit * 100)}% vs ${Math.round(sm.fit0 * 100)}% on fixed default bands${sm.tasked ? ` · shared fields of view: avg ${sm.tasked.toFixed(1)} SVs tasked for ${sm.slots.toFixed(1)} custody slots` : ''}` : '')
+    + (sm.deprioritized ? ` · ${sm.deprioritized} RV deprioritized (impact clear of defended areas)${MODEL.src === 'sim' ? `, freeing ~${Math.round(sm.svMinFreed)} SV-minutes` : ''}; stereo custody counts the threats that still matter` : '');
   if (MODEL.src === 'file') $('#fileStatus').innerHTML = fileStatusText();
   lastUI = 0; drawChart();
 }

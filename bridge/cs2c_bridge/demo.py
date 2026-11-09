@@ -57,7 +57,8 @@ class DemoModel(CustodyModel):
             if held and held[0] in by_id and _score(by_id[held[0]]) >= 0.85 * _score(primary):
                 primary = by_id[held[0]]
             partner, best = None, -1.0
-            for c in cands:
+            monitor = tgt.priority == "Low"   # impact predicted clear of defended areas: one SV is enough
+            for c in ([] if monitor else cands):
                 if c.sv == primary.sv:
                     continue
                 ang = _angle_deg(primary, c)
@@ -72,6 +73,7 @@ class DemoModel(CustodyModel):
             q_band = _best_band(partner)[0] if partner else None
             where = "against space" if primary.background == "space" else "against Earth"
             reason = (f"{p_band} {where}; {_angle_deg(primary, partner):.0f}° stereo with {partner.sv}" if partner
+                      else f"Low priority: impact clear of defended areas; monitor with one SV in {p_band}" if monitor
                       else f"{p_band} {where}; mono, no partner with 15°+ separation")
             self._held[tgt.target] = (primary.sv, partner.sv if partner else None)
             picks.append(Pick(t=obs.t, target=tgt.target, primary=primary.sv, partner=partner.sv if partner else None,

@@ -49,6 +49,18 @@ export const ARCH: Record<string, Arch> = {
     note: '<b>Tranches 1–3</b>: 161 LEO SVs, 42 of them fire-control (T3 is about half missile-defense payloads); MEO Epochs 1 + 2.' },
 };
 
+/** Open-ocean impact point for the errant RV in each region (notional). */
+export const OCEAN_IMPACT: Record<string, Place> = {
+  nk: ['Northwest Pacific', 35.0, 150.0],
+  ir: ['Arabian Sea', 17.0, 63.0],
+  cn: ['Philippine Sea', 28.0, 137.0],
+  ru: ['North Atlantic', 52.0, -35.0],
+};
+/** A threat is High priority if its impact uncertainty comes within this distance of a defended area (km). */
+export const DEFENDED_RADIUS_KM = 300;
+/** Below High and within this extra margin it is Medium; beyond it, Low (km). */
+export const MEDIUM_MARGIN_KM = 500;
+
 export const BANDS: Band[] = ['SWIR', 'MWIR', 'LWIR'];
 /** Sensor field of view, half-angle in degrees (notional). WFOV LEO sees the whole Earth disk; fire-control is narrow. */
 export const FOV_HALF: Record<Layer, number> = { LEO: 62, FC: 8, MEO: 26, GEO: 9, HEO: 10 };

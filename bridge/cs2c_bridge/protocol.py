@@ -38,12 +38,20 @@ class Target:
     lon: float
     alt_km: float
     candidates: List[Candidate] = field(default_factory=list)
+    #: Visualizer's notional IPP assessment (threats only): priority High/Medium/Low, ipp_lat, ipp_lon,
+    #: radius_km, nearest_defended, distance_km, reliable. CS2C may use it or apply its own prioritization.
+    assessment: Optional[Dict[str, Any]] = None
+
+    @property
+    def priority(self) -> str:
+        return str((self.assessment or {}).get("priority", "High"))
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "Target":
         return cls(target=str(d["target"]), kind=str(d.get("kind", "threat")), phase=str(d.get("phase", "")),
                    lat=float(d.get("lat", 0)), lon=float(d.get("lon", 0)), alt_km=float(d.get("alt_km", 0)),
-                   candidates=[Candidate.from_dict(c) for c in d.get("candidates", [])])
+                   candidates=[Candidate.from_dict(c) for c in d.get("candidates", [])],
+                   assessment=d.get("assessment"))
 
 
 @dataclass

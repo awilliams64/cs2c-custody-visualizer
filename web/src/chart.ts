@@ -68,7 +68,8 @@ export function drawStrips(): void {
     for (let k = k0; k <= k1; k++) {
       const r = sim.thrRec[j][k]; if (!r) continue;
       const x0 = (k - k0) / (k1 - k0 + 1) * w, x1 = (k - k0 + 1) / (k1 - k0 + 1) * w;
-      g.fillStyle = r.status === 2 ? C.ok : r.status === 1 ? C.gold : C.bad; g.fillRect(x0, 0, x1 - x0 + 0.5, h);
+      g.fillStyle = r.assess && r.assess.priority === 'Low' && r.status > 0 ? C.muted : r.status === 2 ? C.ok : r.status === 1 ? C.gold : C.bad;
+      g.fillRect(x0, 0, x1 - x0 + 0.5, h);
     }
     if (S.t >= th.tL && S.t <= th.tEnd) { const x = (S.t - th.tL) / (th.tEnd - th.tL) * w; g.fillStyle = C.ink; g.fillRect(x - 1, 0, 2, h); }
   });

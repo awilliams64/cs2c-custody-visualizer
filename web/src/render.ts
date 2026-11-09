@@ -210,15 +210,34 @@ export function render(t: number, k: number, dragging: boolean): void {
     if (!P[3]) {
       g.strokeStyle = col; g.lineWidth = 1.4; g.beginPath();
       g.moveTo(P[0] - 4, P[1] - 4); g.lineTo(P[0] + 4, P[1] + 4); g.moveTo(P[0] + 4, P[1] - 4); g.lineTo(P[0] - 4, P[1] + 4); g.stroke();
-      if (foc || t >= th.tEnd) label(g, th.target, P[0] + 7, P[1] + 12, C.muted, 10);
+      const rr = sim.thrRec[j][k], cleared = !th.errant || t >= th.tEnd || (!!rr && !!rr.assess && rr.assess.priority === 'Low');
+      if ((foc || t >= th.tEnd) && cleared) label(g, th.errant ? th.impactName : th.target, P[0] + 7, P[1] + 12, C.muted, 10);
     }
   });
   drawLos(rec, fp, true);
+  // predicted impact point and its uncertainty for the focused threat
+  if (rec && rec.assess && S.focus && S.focus.kind === 'threat') {
+    const a = rec.assess, c = llv(a.ippLat, a.ippLon), cu = unit(c);
+    const ax = unit(cross(cu, Math.abs(cu[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0])), ay = cross(cu, ax), d = Math.min(a.radiusKm, 3000) / RE;
+    const col = a.priority === 'High' ? C.bad : a.priority === 'Medium' ? C.gold : C.muted;
+    g.strokeStyle = col; g.lineWidth = 1.2; g.setLineDash([4, 4]); g.globalAlpha = 0.8; g.beginPath(); let pen = false;
+    for (let i = 0; i <= 72; i++) {
+      const th2 = i / 72 * Math.PI * 2, cd = Math.cos(d), sd = Math.sin(d), cx = Math.cos(th2), sy = Math.sin(th2);
+      const p: Vec3 = [RE * (cd * cu[0] + sd * (cx * ax[0] + sy * ay[0])), RE * (cd * cu[1] + sd * (cx * ax[1] + sy * ay[1])), RE * (cd * cu[2] + sd * (cx * ax[2] + sy * ay[2]))];
+      proj(p[0], p[1], p[2], P); if (!P[3]) { if (pen) g.lineTo(P[0], P[1]); else g.moveTo(P[0], P[1]); pen = true; } else pen = false;
+    }
+    g.stroke(); g.setLineDash([]);
+    proj(c[0], c[1], c[2], P);
+    if (!P[3]) { g.lineWidth = 1.5; g.beginPath(); g.moveTo(P[0] - 5, P[1]); g.lineTo(P[0] + 5, P[1]); g.moveTo(P[0], P[1] - 5); g.lineTo(P[0], P[1] + 5); g.stroke(); label(g, 'IPP', P[0] + 7, P[1] - 5, col, 9.5, true); }
+    g.globalAlpha = 1;
+  }
   // threat markers
   sim.threats.forEach((th, j) => {
     const st = threatState(th, t); if (!st) return;
     const r = sim.thrRec[j][k], col = th.type === 'B' ? C.bal : C.hgv, foc = !!S.focus && S.focus.kind === 'threat' && S.focus.i === j;
+    const low = !!r && !!r.assess && r.assess.priority === 'Low';
     proj(st.p[0], st.p[1], st.p[2], P); if (P[3]) return;
+    if (low && !foc) g.globalAlpha = 0.5;
     const x = P[0], y = P[1];
     if (st.phase === 'boost') {
       const gr = g.createRadialGradient(x, y, 0, x, y, 12); gr.addColorStop(0, C.plume); gr.addColorStop(1, 'rgba(0,0,0,0)');
@@ -230,12 +249,13 @@ export function render(t: number, k: number, dragging: boolean): void {
     if (th.type === 'B') { g.moveTo(6, 0); g.lineTo(0, 4); g.lineTo(-6, 0); g.lineTo(0, -4); } else { g.moveTo(7, 0); g.lineTo(-5, 5); g.lineTo(-2, 0); g.lineTo(-5, -5); }
     g.closePath(); g.fill(); g.stroke(); g.restore();
     if (r) {
-      g.strokeStyle = r.status === 2 ? C.ok : r.status === 1 ? C.gold : C.bad; g.lineWidth = foc ? 2.2 : 1.4;
+      g.strokeStyle = low && r.status > 0 ? C.muted : r.status === 2 ? C.ok : r.status === 1 ? C.gold : C.bad; g.lineWidth = foc ? 2.2 : 1.4;
       g.beginPath(); g.arc(x, y, foc ? 11 : 8.5, 0, Math.PI * 2); g.stroke();
       if (r.status === 0) { g.setLineDash([2, 3]); g.beginPath(); g.arc(x, y, 15, 0, Math.PI * 2); g.stroke(); g.setLineDash([]); }
     }
-    label(g, th.id, x + 10, y - 9, foc ? C.ink : C.muted, foc ? 11.5 : 10, foc);
+    label(g, th.id + (low ? ' · low' : ''), x + 10, y - 9, foc ? C.ink : C.muted, foc ? 11.5 : 10, foc);
     if (foc && r && r.status === 2) label(g, `θ ${Math.round(r.theta * R2D)}°`, x + 10, y + 16, C.blue, 10.5, true);
+    g.globalAlpha = 1;
     hits.push({ x, y, f: { kind: 'threat', i: j } });
   });
 

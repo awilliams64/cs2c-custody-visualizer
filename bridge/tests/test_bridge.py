@@ -86,3 +86,10 @@ def test_live_server_roundtrip():
 
     reply = asyncio.run(run())
     assert reply["type"] == "picks" and reply["selections"][0]["primaryBand"] == "MWIR"
+
+
+def test_low_priority_target_gets_single_monitor_sv():
+    obs = dict(OBS)
+    obs["targets"] = [dict(OBS["targets"][0], assessment={"priority": "Low", "nearest_defended": "Guam", "distance_km": 2400})]
+    p = DemoModel().select(Observation.from_dict(obs))[0]
+    assert p.partner is None and "Low priority" in p.reason

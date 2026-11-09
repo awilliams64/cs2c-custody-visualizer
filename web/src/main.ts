@@ -63,6 +63,7 @@ $('#regions').onclick = e => {
 };
 seg($('#salvo'), [[1, '1'], [5, '5'], [10, '10'], [20, '20']], 'salvo', () => queueRebuild(false));
 seg($('#mix'), [['bal', 'Ballistic'], ['hgv', 'HGV'], ['mixed', 'Mixed']], 'mix', () => queueRebuild(false));
+$<HTMLInputElement>('#errant').onchange = e => { S.errant = (e.target as HTMLInputElement).checked; queueRebuild(false); };
 seg($('#arch-seg'), Object.entries(ARCH).map(([k, a]) => [k, `${a.label} <small style="opacity:.6">${a.year}</small>`]), 'arch', () => queueRebuild(true));
 const groups = Object.keys(S.layers) as Group[];
 $('#layers').innerHTML = groups.map(l => `<label><input type="checkbox" id="ly-${l}" checked> ${GROUP_LABEL[l]} <small></small></label>`).join('');

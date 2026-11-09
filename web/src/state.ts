@@ -5,7 +5,7 @@ import type { Focus, Group, ModelFeed, Outage, Pulse, Quat, Sat, SimEvent, Site,
 export const S = {
   region: 'nk', salvo: 10, mix: 'mixed', arch: 't2',
   layers: { LEO: true, MEO: true, GEO: true, HEO: true } as Record<Group, boolean>,
-  rings: true, allLos: false, loop: true,
+  rings: true, allLos: false, loop: true, errant: true,
   t: 0, playing: !matchMedia('(prefers-reduced-motion: reduce)').matches, speed: 30,
   focus: { kind: 'site', i: 0 } as Focus, autoFocus: true, follow: true,
   cam: {
@@ -19,7 +19,7 @@ export const sim = {
   dur: 0, nstep: 0,
   siteRec: [] as Track[], thrRec: [] as Track[],
   stats: [] as (StepStat | null)[],
-  summary: { stereo: 0, avgV: 0, agree: 1, tasked: 0, slots: 0, fit: 0, fit0: 0, gapThreats: 0, longest: 0, maxV: 1 } as Summary,
+  summary: { stereo: 0, avgV: 0, agree: 1, tasked: 0, slots: 0, fit: 0, fit0: 0, gapThreats: 0, longest: 0, maxV: 1, deprioritized: 0, svMinFreed: 0 } as Summary,
   stepTask: [] as ({ svs: number; picks: number } | undefined)[],
   events: [] as SimEvent[], outages: [] as Outage[], pulses: [] as Pulse[],
 };

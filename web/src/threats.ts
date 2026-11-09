@@ -1,5 +1,5 @@
 // Notional ballistic RV and hypersonic glide vehicle (HGV) trajectories.
-import { REGIONS } from './config';
+import { OCEAN_IMPACT, REGIONS } from './config';
 import { FIRST_LAUNCH, RE } from './constants';
 import { pad } from './format';
 import { S, sim } from './state';
@@ -13,14 +13,18 @@ export function buildThreats(): void {
   let nb = 0, nh = 0;
   for (let i = 0; i < S.salvo; i++) {
     const si = i % sim.sites.length, site = sim.sites[si];
-    const tg = R.targets[(i + Math.floor(i / sim.sites.length)) % R.targets.length];
+    let tg = R.targets[(i + Math.floor(i / sim.sites.length)) % R.targets.length];
     const type: 'B' | 'H' = S.mix === 'bal' ? 'B' : S.mix === 'hgv' ? 'H' : (i % 2 ? 'H' : 'B');
     const id = type === 'B' ? `B-${pad(++nb)}` : `H-${pad(++nh)}`;
+    // the third launch of a salvo of 5+ is an off-nominal ballistic RV that falls short into open ocean
+    const errant = S.errant && S.salvo >= 5 && i === 2 && type === 'B';
+    const aimpoint = tg[0];
+    if (errant) tg = OCEAN_IMPACT[S.region];
     const a = unit(llv(site.lat, site.lon)), b = unit(llv(tg[1], tg[2]));
     const Om = Math.acos(Math.max(-1, Math.min(1, dot(a, b)))), D = Om * RE;
     const n = unit(cross(a, b));
     const tL = FIRST_LAUNCH + (S.salvo === 1 ? 0 : i * (150 / S.salvo) + (i ? rng() * 8 : 0));
-    const th: Threat = { id, type, site: si, siteName: site.name, target: tg[0], a, b, Om, D, n, tL, TOF: 0, tb: 0, tEnd: 0, H: 0, A: 0, A2: 0, path: [] };
+    const th: Threat = { id, type, site: si, siteName: site.name, target: aimpoint, impactName: tg[0], errant, a, b, Om, D, n, tL, TOF: 0, tb: 0, tEnd: 0, H: 0, A: 0, A2: 0, path: [] };
     if (type === 'B') { th.TOF = 240 + D / 6.5; th.H = Math.min(1300, 0.22 * D + 100); th.tb = D > 5500 ? 180 : 110; }
     else { th.TOF = 200 + D / 4.0; th.tb = D > 4000 ? 150 : 100; th.A = Math.min(650, 0.08 * D) * (rng() < 0.5 ? -1 : 1); th.A2 = rng() < 0.5 ? -1 : 1; }
     th.tEnd = tL + th.TOF;

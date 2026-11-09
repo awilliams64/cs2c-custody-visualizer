@@ -3,14 +3,22 @@ import { DT } from './constants';
 import { S, sim } from './state';
 import { isOut } from './tasking';
 import { hgvLatRate } from './threats';
-import type { Band, Phase, StepRec } from './types';
+import { fmtN } from './format';
+import type { Assessment, Band, Phase, Priority, StepRec, Threat } from './types';
 
 const PHASE_EVT: Partial<Record<Phase, string>> = {
   mid: 'Burnout · RV in midcourse', reentry: 'Re-entry heating begins', glide: 'Pull-up · glide phase', terminal: 'Terminal dive',
 };
 
-type Snap = Pick<StepRec, 'best' | 'partner' | 'bandP' | 'bandQ' | 'phase' | 'status'>;
-const snap = (r: StepRec): Snap => ({ best: r.best, partner: r.partner, bandP: r.bandP, bandQ: r.bandQ, phase: r.phase, status: r.status });
+type Snap = Pick<StepRec, 'best' | 'partner' | 'bandP' | 'bandQ' | 'phase' | 'status'> & { prio: Priority | null };
+const snap = (r: StepRec): Snap => ({ best: r.best, partner: r.partner, bandP: r.bandP, bandQ: r.bandQ, phase: r.phase, status: r.status, prio: r.assess ? r.assess.priority : null });
+
+const round = (km: number, to: number) => fmtN(Math.round(km / to) * to);
+function priorityText(th: Threat, a: Assessment): string {
+  if (a.priority === 'Low') return `IPP ${th.errant ? 'in open ocean' : 'clear'}, ~${round(a.nearestKm, 100)} km from ${a.nearest} (±${round(a.radiusKm, 10)} km) · priority → Low, monitor only`;
+  if (a.priority === 'Medium') return `IPP refining, ~${round(a.nearestKm, 100)} km from ${a.nearest} (±${round(a.radiusKm, 50)} km) · priority → Medium`;
+  return `IPP could reach ${a.nearest} · priority → High`;
+}
 
 export function buildEvents(): void {
   const events = sim.events = [] as typeof sim.events;
@@ -20,8 +28,8 @@ export function buildEvents(): void {
     let prev: Snap | null = null, lastMan = -1e9;
     sim.thrRec[j].forEach((r, k) => {
       const t = k * DT;
-      if (!r) { if (prev) { events.push({ t, j, kind: 'impact', text: `Impact near ${th.target}` }); prev = null; } return; }
-      const tasking = () => r.best >= 0 ? `${id(r.best)}${bandTxt(r.bandP)}${r.partner >= 0 ? ` + ${id(r.partner)}${bandTxt(r.bandQ)}` : ' (mono)'}` : 'no SV available';
+      if (!r) { if (prev) { events.push({ t, j, kind: 'impact', text: th.errant ? `Impact in open ocean (${th.impactName})` : `Impact near ${th.target}` }); prev = null; } return; }
+      const tasking = () => r.best >= 0 ? `${id(r.best)}${bandTxt(r.bandP)}${r.partner >= 0 ? ` + ${id(r.partner)}${bandTxt(r.bandQ)}` : r.assess && r.assess.priority === 'Low' ? ' (monitor)' : ' (mono)'}` : 'no SV available';
       if (!prev) {
         events.push({ t, j, kind: 'launch', text: `Launch detected from ${th.siteName} · ${r.vis.length} SVs in view` });
         events.push({ t: t + 0.1, j, kind: 'task', sv: r.best, text: `CS2C tasks ${tasking()}` });
@@ -30,6 +38,10 @@ export function buildEvents(): void {
       let cause: string | null = null;
       const phaseText = PHASE_EVT[r.phase];
       if (r.phase !== prev.phase && phaseText) { events.push({ t, j, kind: 'phase', text: phaseText }); cause = 'phase change'; }
+      if (r.assess && prev.prio && r.assess.priority !== prev.prio) {
+        events.push({ t, j, kind: 'priority', text: priorityText(th, r.assess) });
+        cause = r.assess.priority === 'Low' ? 'deprioritized, impact clear of defended areas' : 'priority raised';
+      }
       const lr0 = hgvLatRate(th, t - DT), lr1 = hgvLatRate(th, t);
       if (lr0 && lr1 && Math.sign(lr0) !== Math.sign(lr1) && t - lastMan > 60) { events.push({ t, j, kind: 'maneuver', text: 'Cross-range maneuver detected' }); lastMan = t; }
       // a swap of primary and partner roles is not a retask

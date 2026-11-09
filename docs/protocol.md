@@ -36,6 +36,8 @@ The visualizer connects to `ws://localhost:8765` (configurable) when you press *
 { "type": "observe", "t": 500, "step": 50, "outages": ["T1-0301"],
   "targets": [ {
     "target": "B-01", "kind": "threat", "phase": "mid", "lat": 31.2, "lon": 135.8, "alt_km": 805,
+    "assessment": { "priority": "High", "ipp_lat": 13.6, "ipp_lon": 144.9, "radius_km": 180,
+                    "nearest_defended": "Guam", "distance_km": 20, "reliable": true },
     "candidates": [ {
       "sv": "E1-0103", "layer": "MEO", "range_km": 7612, "elevation_deg": 64.8, "background": "earth",
       "los": [0.4121, 0.6232, 0.6648], "access_s": 300,
@@ -48,6 +50,7 @@ The visualizer connects to `ws://localhost:8765` (configurable) when you press *
 - `access_s` is predicted remaining access from orbit propagation.
 - `background`: `space` (target seen above the horizon) or `earth`.
 - `band_fit`: notional suitability 0–1 for each band that SV carries.
+- `assessment` (threats only): the visualizer's notional predicted-impact-point (IPP) estimate. `priority` is `High` while the uncertainty `radius_km` comes within 300 km of a defended area, `Medium` within a further 500 km, `Low` beyond. `reliable` is false in boost and for gliding HGVs. CS2C may use it or apply its own prioritization; in Python it is `target.assessment` and `target.priority`.
 
 ### `picks`
 ```json

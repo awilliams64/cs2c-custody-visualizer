@@ -28,6 +28,10 @@ export interface Threat {
   tL: number; TOF: number; tb: number; tEnd: number;
   H: number; A: number; A2: number;
   path: Vec3[];
+  /** Off-nominal RV that falls short into open ocean (true impact is the ocean point, not the aimpoint). */
+  errant: boolean;
+  /** True impact point name: the aimpoint, or the ocean area for an errant RV. */
+  impactName: string;
 }
 export interface ThreatState { p: Vec3; h: number; phase: Phase }
 
@@ -42,12 +46,23 @@ export interface WhyParts { geo: number; dwell: number; band: number; fc: number
 export interface Why {
   p: WhyParts; q: WhyParts | null; th: number; score: number; second: number;
   alt: [number, number] | null; mono: boolean; held: boolean;
+  /** Low-priority threat watched by a single (preferably shared) SV instead of a stereo pair. */
+  monitor?: boolean;
 }
 export interface Baseline { best: number; partner: number; theta: number; status: Status; bestV: Vis | null; partnerV: Vis | null }
 
 /** Everything known about one target at one time step. */
+export type Priority = 'High' | 'Medium' | 'Low';
+/** Predicted impact point (IPP) assessment for a threat at one step. */
+export interface Assessment {
+  priority: Priority; ippLat: number; ippLon: number; radiusKm: number;
+  nearest: string; nearestKm: number; reliable: boolean;
+}
+
 export interface StepRec {
   vis: Vis[]; vis0: Vis[]; phase: Phase;
+  /** Threat assessment (null for launch sites). */
+  assess: Assessment | null;
   best: number; partner: number; bestV: Vis | null; partnerV: Vis | null; theta: number; status: Status;
   b: Baseline;
   sim: [number, number];
@@ -64,9 +79,11 @@ export interface StepStat { n: number; min: number; max: number; avg: number; c:
 export interface Summary {
   stereo: number; avgV: number; agree: number; tasked: number; slots: number; fit: number; fit0: number;
   gapThreats: number; longest: number; maxV: number;
+  /** Threats demoted to Low priority at some point, and SV-minutes freed versus a dedicated stereo pair. */
+  deprioritized: number; svMinFreed: number;
 }
 
-export type EventKind = 'launch' | 'task' | 'phase' | 'maneuver' | 'retask' | 'retask-out' | 'gap' | 'regain' | 'impact';
+export type EventKind = 'launch' | 'task' | 'phase' | 'maneuver' | 'priority' | 'retask' | 'retask-out' | 'gap' | 'regain' | 'impact';
 export interface SimEvent { t: number; j: number; kind: EventKind; text: string; sv?: number }
 export interface Outage { s: number; t: number }
 export interface Pulse { kind: EventKind | 'sv' | 'out'; s?: number; j?: number; start: number }

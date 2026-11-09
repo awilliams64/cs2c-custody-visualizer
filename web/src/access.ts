@@ -1,6 +1,7 @@
 // Sensor access: which SVs can see each target at each time step, plus the baseline geometry rule.
 import { LAYER_BANDS, RANGE, bandSuit, phaseClass } from './config';
 import { DT, MIN_STEREO, RE } from './constants';
+import { assessThreats } from './assess';
 import { allSatPos } from './orbits';
 import { sim } from './state';
 import { applySource, saveBaseline } from './tasking';
@@ -37,7 +38,7 @@ function bandsFor(v: Vis, layer: Layer, pc: PhaseClass): void {
 
 function newRec(vis: Vis[], phase: Phase): StepRec {
   return {
-    vis, vis0: vis, phase, best: -1, partner: -1, bestV: null, partnerV: null, theta: 0, status: 0,
+    vis, vis0: vis, phase, assess: null, best: -1, partner: -1, bestV: null, partnerV: null, theta: 0, status: 0,
     b: { best: -1, partner: -1, theta: 0, status: 0, bestV: null, partnerV: null }, sim: [-1, -1], why: null, shareP: [], shareQ: [],
     picked: 'base', pickInView: true, partnerInView: true, pickId: null, partnerId: null, bandP: null, bandQ: null, bandMode: 'fixed', reason: null,
   };
@@ -62,6 +63,7 @@ export function precompute(): void {
     sim.sites.forEach((st, j) => { sim.siteRec[j][k] = newRec(scan(st.p, 'boost'), 'watch'); });
     sim.threats.forEach((th, j) => { const ts = threatState(th, t); sim.thrRec[j][k] = ts ? newRec(scan(ts.p, phaseClass(ts.phase)), ts.phase) : null; });
   }
+  assessThreats();
   allTracks().forEach(selectGeometry);
   sim.outages = [];
   saveBaseline(); applySource();
