@@ -9,6 +9,8 @@ import { threatState } from './threats';
 import type { Band, CircSat, Focus, StepRec, Vec3 } from './types';
 import { cross, llv, unit } from './vec';
 import { WORLD, WORLD_LO } from './world';
+import { drawDefenseOver, drawDefenseUnder, isDestroyed, killedAt, ring } from './mda';
+import { subsolar } from './sun';
 
 const cv = $<HTMLCanvasElement>('#globe'), ctx = cv.getContext('2d')!;
 const stat = $<HTMLCanvasElement>('#world'), sctx = stat.getContext('2d')!;
@@ -39,6 +41,7 @@ export function focusRec(k: number): StepRec | null {
 export function focusPos(t: number): Vec3 | null {
   const f = S.focus; if (!f) return null;
   if (f.kind === 'site') return sim.sites[f.i].p;
+  if (isDestroyed(f.i, t)) return null;
   const st = threatState(sim.threats[f.i], t); return st ? st.p : null;
 }
 export const stepAt = (t: number) => Math.min(sim.nstep - 1, Math.max(0, Math.floor(t / DT + 0.5)));
@@ -90,7 +93,7 @@ function bandChip(g: CanvasRenderingContext2D, band: Band, x: number, y: number)
   if (g.roundRect) g.roundRect(x, y - 10, w, 13, 3); else g.rect(x, y - 10, w, 13);
   g.fill(); g.fillStyle = '#fff'; g.fillText(band, x + 4, y);
 }
-function label(g: CanvasRenderingContext2D, txt: string, x: number, y: number, col: string, size: number, bold = false): void {
+export function label(g: CanvasRenderingContext2D, txt: string, x: number, y: number, col: string, size: number, bold = false): void {
   g.font = `${bold ? 600 : 500} ${size}px "IBM Plex Mono",ui-monospace,monospace`;
   g.lineWidth = 3; g.strokeStyle = C.globe; g.lineJoin = 'round'; g.strokeText(txt, x, y); g.fillStyle = col; g.fillText(txt, x, y);
 }
@@ -99,9 +102,9 @@ function label(g: CanvasRenderingContext2D, txt: string, x: number, y: number, c
 export function render(t: number, k: number, dragging: boolean): void {
   // auto-focus: first threat to launch, then whichever is active
   if (S.autoFocus) {
-    const f = S.focus, cur = f && f.kind === 'threat' ? sim.thrRec[f.i][k] : null;
+    const f = S.focus, cur = f && f.kind === 'threat' && !isDestroyed(f.i, t) ? sim.thrRec[f.i][k] : null;
     if (!cur) {
-      const j = sim.threats.findIndex((_, j) => sim.thrRec[j][k]);
+      const j = sim.threats.findIndex((_, j) => sim.thrRec[j][k] && !isDestroyed(j, t));
       if (j >= 0) S.focus = { kind: 'threat', i: j }; else if (!f || f.kind === 'threat') S.focus = { kind: 'site', i: 0 };
     }
   }
@@ -135,11 +138,24 @@ export function render(t: number, k: number, dragging: boolean): void {
     g.globalAlpha = 1;
   }
 
+  // day/night terminator and the sub-solar point (scenario starts at page-load UTC)
+  if (S.sun) {
+    const [sla, slo] = subsolar(S.epoch + t * 1000);
+    g.strokeStyle = C.sun; g.globalAlpha = 0.55; g.lineWidth = 1.2; g.beginPath(); let pen = false;
+    for (const q of ring(sla, slo, 90, 144)) { proj(q[0], q[1], q[2], P); if (!P[3]) { if (pen) g.lineTo(P[0], P[1]); else g.moveTo(P[0], P[1]); pen = true; } else pen = false; }
+    g.stroke(); g.globalAlpha = 1;
+    const sp = llv(sla, slo); proj(sp[0], sp[1], sp[2], P);
+    if (!P[3]) { g.fillStyle = C.sun; g.shadowColor = C.sun; g.shadowBlur = 10; g.beginPath(); g.arc(P[0], P[1], 4, 0, Math.PI * 2); g.fill(); g.shadowBlur = 0; }
+  }
+  // missile defense: fans, rings, homeports and elements
+  drawDefenseUnder(g, t, label);
+
   // which SVs are in view of what
   const inAny = new Set<number>(), bestAny = new Set<number>();
   // pre-launch default watch: no lines until a missile fires or the user picks a site
-  const rec = (S.autoFocus && S.focus && S.focus.kind === 'site') ? null : focusRec(k);
-  const thrNow = sim.thrRec.map(r => r[k]).filter((r): r is StepRec => !!r);
+  const focDead = !!S.focus && S.focus.kind === 'threat' && isDestroyed(S.focus.i, t);
+  const rec = (S.autoFocus && S.focus && S.focus.kind === 'site') || focDead ? null : focusRec(k);
+  const thrNow = sim.thrRec.map((r, j) => isDestroyed(j, t) ? null : r[k]).filter((r): r is StepRec => !!r);
   const pool = thrNow.length ? thrNow : [...sim.siteRec.map(r => r[k]).filter((r): r is StepRec => !!r)];
   pool.forEach(r => { r.vis.forEach(v => inAny.add(v.s)); if (r.best >= 0) bestAny.add(r.best); });
   const inFocus = new Set(rec ? rec.vis.map(v => v.s) : []);
@@ -160,7 +176,7 @@ export function render(t: number, k: number, dragging: boolean): void {
     if (r.best >= 0) { const sp = edgeClamp(satScr[r.best]); if (sp) { g.strokeStyle = r.bestV ? C.gold : C.bad; g.lineWidth = strong ? 2.4 : 1.4; g.beginPath(); g.moveTo(tx, ty); g.lineTo(sp[0], sp[1]); g.stroke(); } }
   };
   if (S.allLos) sim.threats.forEach((th, j) => {
-    if (S.focus && S.focus.kind === 'threat' && S.focus.i === j) return;
+    if ((S.focus && S.focus.kind === 'threat' && S.focus.i === j) || isDestroyed(j, t)) return;
     const r = sim.thrRec[j][k], st = threatState(th, t); if (r && st) drawLos(r, st.p, false);
   });
 
@@ -196,13 +212,14 @@ export function render(t: number, k: number, dragging: boolean): void {
   sim.threats.forEach((th, j) => {
     if (t < th.tL) return;
     const col = th.type === 'B' ? C.bal : C.hgv, foc = !!S.focus && S.focus.kind === 'threat' && S.focus.i === j;
-    const cutoff = Math.min(th.path.length - 1, Math.floor((t - th.tL) / 5));
+    const tk = killedAt(j), dead = tk !== null && t >= tk, tDraw = dead ? tk! : t;
+    const cutoff = Math.min(th.path.length - 1, Math.floor((tDraw - th.tL) / 5));
     g.lineWidth = foc ? 2 : 1.3; g.strokeStyle = col;
-    for (let pass = 0; pass < 2; pass++) {
+    for (let pass = 0; pass < (dead ? 1 : 2); pass++) {
       g.globalAlpha = pass ? 0.3 : (foc ? 1 : 0.8); g.setLineDash(pass ? [3, 4] : []); g.beginPath(); let pen = false;
       const from = pass ? cutoff : 0, to = pass ? th.path.length - 1 : cutoff;
       for (let i = from; i <= to; i++) { const q = th.path[i]; proj(q[0], q[1], q[2], P); if (!P[3]) { if (pen) g.lineTo(P[0], P[1]); else g.moveTo(P[0], P[1]); pen = true; } else pen = false; }
-      if (!pass && t < th.tEnd) { const st = threatState(th, t); if (st) { proj(st.p[0], st.p[1], st.p[2], P); if (!P[3]) g.lineTo(P[0], P[1]); } }
+      if (!pass && tDraw < th.tEnd) { const st = threatState(th, tDraw); if (st) { proj(st.p[0], st.p[1], st.p[2], P); if (!P[3]) g.lineTo(P[0], P[1]); } }
       g.stroke();
     }
     g.setLineDash([]); g.globalAlpha = 1;
@@ -233,7 +250,7 @@ export function render(t: number, k: number, dragging: boolean): void {
   }
   // threat markers
   sim.threats.forEach((th, j) => {
-    const st = threatState(th, t); if (!st) return;
+    const st = threatState(th, t); if (!st || isDestroyed(j, t)) return;
     const r = sim.thrRec[j][k], col = th.type === 'B' ? C.bal : C.hgv, foc = !!S.focus && S.focus.kind === 'threat' && S.focus.i === j;
     const low = !!r && !!r.assess && r.assess.priority === 'Low';
     proj(st.p[0], st.p[1], st.p[2], P); if (P[3]) return;
@@ -258,6 +275,8 @@ export function render(t: number, k: number, dragging: boolean): void {
     g.globalAlpha = 1;
     hits.push({ x, y, f: { kind: 'threat', i: j } });
   });
+  // missile defense: radar track lines, interceptors and intercepts
+  drawDefenseOver(g, t, label);
 
   // baseline ghost ring where the selection differs from the baseline rule
   if (rec && MODEL.src !== 'base' && rec.b.best >= 0 && rec.b.best !== rec.best) {
@@ -271,7 +290,7 @@ export function render(t: number, k: number, dragging: boolean): void {
       const sp = edgeClamp(satScr[si]);
       if (sp && share.length) {
         g.strokeStyle = col; g.globalAlpha = 0.5; g.lineWidth = 1; g.setLineDash([2, 4]);
-        share.forEach(j => { const st = threatState(sim.threats[j], t); if (!st) return; proj(st.p[0], st.p[1], st.p[2], P); if (P[3]) return; g.beginPath(); g.moveTo(sp[0], sp[1]); g.lineTo(P[0], P[1]); g.stroke(); });
+        share.forEach(j => { const st = threatState(sim.threats[j], t); if (!st || isDestroyed(j, t)) return; proj(st.p[0], st.p[1], st.p[2], P); if (P[3]) return; g.beginPath(); g.moveTo(sp[0], sp[1]); g.lineTo(P[0], P[1]); g.stroke(); });
         g.setLineDash([]); g.globalAlpha = 1;
       }
     });
@@ -297,7 +316,7 @@ export function render(t: number, k: number, dragging: boolean): void {
     const f = (nowP - pl.start) / 2000; let x: number, y: number, col: string;
     if (pl.kind === 'sv' || pl.kind === 'out') { const p = edgeClamp(satScr[pl.s!]); if (!p) return; x = p[0]; y = p[1]; col = pl.kind === 'out' ? C.bad : C.gold; }
     else {
-      const st = threatState(sim.threats[pl.j!], t); if (!st) return; proj(st.p[0], st.p[1], st.p[2], P); if (P[3]) return; x = P[0]; y = P[1];
+      const st = threatState(sim.threats[pl.j!], t); if (!st || isDestroyed(pl.j!, t)) return; proj(st.p[0], st.p[1], st.p[2], P); if (P[3]) return; x = P[0]; y = P[1];
       col = ({ launch: C.plume, phase: C.blue, maneuver: C.hgv, gap: C.bad, regain: C.ok, impact: C.muted } as Record<string, string>)[pl.kind] || C.gold;
     }
     g.globalAlpha = 0.55 * (1 - f) * (1 - f); g.strokeStyle = col; g.lineWidth = 1.5; g.beginPath(); g.arc(x, y, 8 + f * 18, 0, Math.PI * 2); g.stroke(); g.globalAlpha = 1;

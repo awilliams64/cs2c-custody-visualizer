@@ -1,20 +1,52 @@
 // Notional ballistic RV and hypersonic glide vehicle (HGV) trajectories.
-import { OCEAN_IMPACT, REGIONS } from './config';
+import { LOCATION_CLASS, OCEAN_IMPACT, REGIONS, type Place } from './config';
 import { FIRST_LAUNCH, RE } from './constants';
+import { gcKm } from './assess';
+import { SYS, SYS_GEO, flySystem, type Maneuver } from './systems';
 import { pad } from './format';
 import { S, sim } from './state';
 import type { Phase, Threat, ThreatState, Vec3 } from './types';
 import { cross, dot, hash, llv, mulberry, unit } from './vec';
 
+/** Aimpoints for the current region and threat system (the defended areas used by the assessment). */
+export function defendedAreas(): Place[] {
+  const R = REGIONS[S.region], g = S.sys !== 'generic' ? SYS_GEO[S.sys] : undefined;
+  return g && g.targets ? [...R.targets, ...g.targets.filter(t => !R.targets.some(r => r[0] === t[0]))] : R.targets;
+}
+
 export function buildThreats(): void {
   const R = REGIONS[S.region], rng = mulberry(hash(S.region + S.salvo + S.mix));
   sim.sites = R.sites.map(([name, lat, lon]) => ({ name, lat, lon, p: llv(lat, lon, 0.5) }));
+  const nReg = sim.sites.length;
+  // a named system may launch from its own point (air or sea launch, shorter-range sites) and aim at regional targets
+  const sysKey = S.sys !== 'generic' && SYS[S.sys] ? S.sys : null, geo = sysKey ? SYS_GEO[sysKey] || {} : {};
+  const sysSites: number[] = [];
+  if (sysKey) (geo.launch || R.sites).forEach(([name, lat, lon]) => {
+    let k = sim.sites.findIndex(s => s.name === name);
+    if (k < 0) { sim.sites.push({ name, lat, lon, p: llv(lat, lon, 0.5) }); k = sim.sites.length - 1; }
+    sysSites.push(k);
+  });
+  const sysTargets = sysKey ? defendedAreas() : [];
+  const maxKm = sysKey ? SYS[sysKey].maxKm : null;
+  const dist = (si: number, t: Place) => gcKm(sim.sites[si].lat, sim.sites[si].lon, t[1], t[2]);
+  /** Targets inside the system's listed range from this launch point, or the nearest one if none is. */
+  const reach = (si: number): Place[] => {
+    // intercontinental systems (FOBS, Avangard) go for the continental U.S.
+    const pool = maxKm === null && sysTargets.some(t => LOCATION_CLASS[t[0]] === 'CONUS') ? sysTargets.filter(t => LOCATION_CLASS[t[0]] === 'CONUS') : sysTargets;
+    const ok = pool.filter(t => maxKm === null || dist(si, t) <= maxKm);
+    return ok.length ? ok : [sysTargets.slice().sort((a, b) => dist(si, a) - dist(si, b))[0]];
+  };
+  // launch points with a target inside the listed range come first
+  const inRange = (si: number) => maxKm === null || sysTargets.some(t => dist(si, t) <= maxKm);
+  if (sysKey) { const ok = sysSites.filter(inRange); if (ok.length) sysSites.splice(0, sysSites.length, ...ok); }
   const threats: Threat[] = [];
   let nb = 0, nh = 0;
   for (let i = 0; i < S.salvo; i++) {
-    const si = i % sim.sites.length, site = sim.sites[si];
-    let tg = R.targets[(i + Math.floor(i / sim.sites.length)) % R.targets.length];
     const type: 'B' | 'H' = S.mix === 'bal' ? 'B' : S.mix === 'hgv' ? 'H' : (i % 2 ? 'H' : 'B');
+    const named = type === 'H' && !!sysKey;
+    const si = named ? sysSites[nh % sysSites.length] : i % nReg, site = sim.sites[si];
+    let tg = named ? (() => { const r = reach(si); return r[Math.floor(nh / sysSites.length) % r.length]; })()
+      : R.targets[(i + Math.floor(i / nReg)) % R.targets.length];
     const id = type === 'B' ? `B-${pad(++nb)}` : `H-${pad(++nh)}`;
     // the third launch of a salvo of 5+ is an off-nominal ballistic RV that falls short into open ocean
     const errant = S.errant && S.salvo >= 5 && i === 2 && type === 'B';
@@ -24,8 +56,13 @@ export function buildThreats(): void {
     const Om = Math.acos(Math.max(-1, Math.min(1, dot(a, b)))), D = Om * RE;
     const n = unit(cross(a, b));
     const tL = FIRST_LAUNCH + (S.salvo === 1 ? 0 : i * (150 / S.salvo) + (i ? rng() * 8 : 0));
-    const th: Threat = { id, type, site: si, siteName: site.name, target: aimpoint, impactName: tg[0], errant, a, b, Om, D, n, tL, TOF: 0, tb: 0, tEnd: 0, H: 0, A: 0, A2: 0, path: [] };
+    const th: Threat = { id, type, site: si, siteName: site.name, target: aimpoint, impactName: tg[0], errant, a, b, Om, D, n, tL, TOF: 0, tb: 0, tEnd: 0, H: 0, A: 0, A2: 0, path: [], sys: null, man: null, flight: null };
     if (type === 'B') { th.TOF = 240 + D / 6.5; th.H = Math.min(1300, 0.22 * D + 100); th.tb = D > 5500 ? 180 : 110; }
+    else if (named) {
+      const man = (S.man === 'auto' ? SYS[sysKey!].m.man : S.man) as Maneuver;
+      const fl = flySystem([site.lat, site.lon], [tg[1], tg[2]], sysKey!, man);
+      Object.assign(th, { sys: sysKey, man, flight: fl, TOF: fl.total, tb: fl.Tb, D: fl.rangeKm });
+    }
     else { th.TOF = 200 + D / 4.0; th.tb = D > 4000 ? 150 : 100; th.A = Math.min(650, 0.08 * D) * (rng() < 0.5 ? -1 : 1); th.A2 = rng() < 0.5 ? -1 : 1; }
     th.tEnd = tL + th.TOF;
     threats.push(th);
@@ -49,6 +86,11 @@ function gc(th: Threat, s: number, lat: number): Vec3 {
 const hgvCrossRange = (th: Threat, u: number) => th.A * Math.sin(Math.PI * u) + th.A2 * 0.35 * Math.abs(th.A) * Math.sin(3 * Math.PI * u) * u;
 
 export function threatState(th: Threat, t: number): ThreatState | null {
+  if (th.flight) {
+    const x = t - th.tL, sm = th.flight.samples; if (x < 0 || x > th.TOF) return null;
+    const i = Math.min(sm.length - 2, Math.floor(x)), f = x - i, a = sm[i], b = sm[i + 1];
+    return { p: [a.p[0] + (b.p[0] - a.p[0]) * f, a.p[1] + (b.p[1] - a.p[1]) * f, a.p[2] + (b.p[2] - a.p[2]) * f], h: a.h + (b.h - a.h) * f, phase: sm[Math.round(x)].ph };
+  }
   const tau = (t - th.tL) / th.TOF;
   if (tau < 0 || tau > 1) return null;
   const tb = th.tb / th.TOF;
@@ -74,6 +116,7 @@ export function threatState(th: Threat, t: number): ThreatState | null {
 /** Cross-range rate sign proxy for maneuver detection (0 outside the glide phase). */
 export function hgvLatRate(th: Threat, t: number): number {
   if (th.type !== 'H') return 0;
+  if (th.flight) { const sm = th.flight.samples, x = Math.round(t - th.tL); return x <= 0 || x >= sm.length - 1 ? 0 : sm[x + 1].lat - sm[x].lat; }
   const tau = (t - th.tL) / th.TOF, tb = th.tb / th.TOF;
   if (tau <= tb || tau >= 1) return 0;
   const u = (tau - tb) / (1 - tb);

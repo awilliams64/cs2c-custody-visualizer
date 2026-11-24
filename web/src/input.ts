@@ -1,6 +1,6 @@
 // 3D manipulation: drag = tumble, shift/right-drag = roll, wheel/pinch = zoom, two-finger twist = roll,
 // double-click = reset, arrow keys / Q / E / +/- for keyboard users.
-import { qLook, qaxis, qmul, qnorm, setDist, view } from './camera';
+import { qLook, qaxis, qmul, qnorm, setDist, unproj, view } from './camera';
 import { REGIONS } from './config';
 import { $ } from './dom';
 import { globeCanvas as cv, hits } from './render';
@@ -14,7 +14,7 @@ export const isDragging = () => !!drag;
 
 const followOff = () => { S.follow = false; $('#follow').setAttribute('aria-pressed', 'false'); };
 
-export function initInput(onFocus: (f: NonNullable<Focus>) => void, togglePlay: () => void): void {
+export function initInput(onFocus: (f: NonNullable<Focus>) => void, togglePlay: () => void, onSurface?: (p: Vec3 | null) => boolean): void {
   cv.addEventListener('contextmenu', e => e.preventDefault());
   cv.addEventListener('pointerdown', e => {
     if (e.pointerType === 'mouse' || !ptrs.size) { ptrs.clear(); drag = null; }
@@ -52,6 +52,7 @@ export function initInput(onFocus: (f: NonNullable<Focus>) => void, togglePlay: 
     const was = drag; ptrs.delete(e.pointerId);
     if (was && !was.moved && e.type === 'pointerup') {
       const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+      if (onSurface && onSurface(unproj(x, y))) { ptrs.delete(e.pointerId); drag = null; cv.classList.remove('drag'); return; }
       let best: typeof hits[number] | null = null, bd = 16;
       hits.forEach(h => { const d = Math.hypot(h.x - x, h.y - y); if (d < bd) { bd = d; best = h; } });
       if (best) onFocus((best as typeof hits[number]).f);

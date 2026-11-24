@@ -1,5 +1,6 @@
 // Canvas colours come from the CSS tokens so the globe follows light and dark mode.
-const KEYS = ['bg', 'panel', 'ink', 'muted', 'line', 'globe', 'coast', 'grat', 'sv', 'gold', 'gold-ink', 'blue', 'bal', 'hgv', 'plume', 'ok', 'bad', 'swir', 'mwir', 'lwir'] as const;
+const KEYS = ['bg', 'panel', 'ink', 'muted', 'line', 'globe', 'coast', 'grat', 'sv', 'gold', 'gold-ink', 'blue', 'bal', 'hgv', 'plume', 'ok', 'bad', 'swir', 'mwir', 'lwir',
+  'mda-gbi', 'mda-sm3', 'mda-thaad', 'mda-pac3', 'mda-sm6', 'mda-gpi', 'mda-radar', 'mda-c2', 'sun'] as const;
 export type Token = typeof KEYS[number];
 export const C = {} as Record<Token, string>;
 

@@ -62,12 +62,15 @@ export const OCEAN_IMPACT: Record<string, Place> = {
  * then allied areas; open-ocean impacts near zero.
  */
 export const TYPE_WEIGHT = { hgv: 1.0, icbm: 0.8, ballistic: 0.75 } as const;
-export const LOCATION_CLASS: Record<string, 'CONUS' | 'US territory' | 'Allied'> = {
+export const LOCATION_CLASS: Record<string, 'CONUS' | 'US territory' | 'US forces at sea' | 'Allied'> = {
   Seattle: 'CONUS', 'Los Angeles': 'CONUS', Washington: 'CONUS', 'New York': 'CONUS', Chicago: 'CONUS',
   Guam: 'US territory', Honolulu: 'US territory', Anchorage: 'US territory',
   'Diego Garcia': 'Allied', Rome: 'Allied', Berlin: 'Allied', London: 'Allied',
+  // aimpoints used by the named threat systems
+  'Kadena AB': 'Allied', 'Ramstein AB': 'Allied', 'Nevatim AB': 'Allied',
+  'CSG · Philippine Sea': 'US forces at sea', 'CSG · Norwegian Sea': 'US forces at sea',
 };
-export const LOCATION_WEIGHT = { CONUS: 1.0, 'US territory': 0.85, Allied: 0.75, 'open ocean': 0.1 } as const;
+export const LOCATION_WEIGHT = { CONUS: 1.0, 'US territory': 0.85, 'US forces at sea': 0.9, Allied: 0.75, 'open ocean': 0.1 } as const;
 /** How much of the location weight applies while the IPP may or may not reach it. */
 export const REACH_FACTOR = { High: 1, Medium: 0.6, Low: 0 } as const;
 

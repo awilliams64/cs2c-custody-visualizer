@@ -1,4 +1,5 @@
 // Shared types for the CS2C Custody Visualizer.
+import type { Maneuver, SysFlight } from './systems';
 
 export type Vec3 = [number, number, number];
 export type Quat = [number, number, number, number];
@@ -32,6 +33,8 @@ export interface Threat {
   errant: boolean;
   /** True impact point name: the aimpoint, or the ocean area for an errant RV. */
   impactName: string;
+  /** Named threat system (HGV threats only; null = generic glide model), its maneuver and precomputed flight. */
+  sys: string | null; man: Maneuver | null; flight: SysFlight | null;
 }
 export interface ThreatState { p: Vec3; h: number; phase: Phase }
 
@@ -87,7 +90,8 @@ export interface Summary {
   valueStereo: number;
 }
 
-export type EventKind = 'launch' | 'task' | 'phase' | 'maneuver' | 'priority' | 'retask' | 'retask-out' | 'gap' | 'regain' | 'impact';
+export type EventKind = 'launch' | 'task' | 'phase' | 'maneuver' | 'priority' | 'retask' | 'retask-out' | 'gap' | 'regain' | 'impact'
+  /* missile-defense layer */ | 'track' | 'c2' | 'shoot' | 'kill' | 'miss' | 'leak';
 export interface SimEvent { t: number; j: number; kind: EventKind; text: string; sv?: number }
 export interface Outage { s: number; t: number }
 export interface Pulse { kind: EventKind | 'sv' | 'out'; s?: number; j?: number; start: number }

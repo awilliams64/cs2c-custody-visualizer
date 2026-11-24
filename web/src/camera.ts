@@ -83,6 +83,15 @@ export function proj(x: number, y: number, z: number, out: ScreenPt): ScreenPt {
 }
 export const pt = (): ScreenPt => [0, 0, 0, 0] as ScreenPt;
 
+/** Surface point (km, Earth-fixed) under screen position (sx, sy), or null off the globe. */
+export function unproj(sx: number, sy: number): Vec3 | null {
+  const v = view, a = (sx - v.CX) / v.F, b = -(sy - v.CY) / v.F;
+  const d = unit([v.CR[0] * a + v.CU[0] * b - v.CB[0], v.CR[1] * a + v.CU[1] * b - v.CB[1], v.CR[2] * a + v.CU[2] * b - v.CB[2]]);
+  const B = 2 * dot(v.E, d), Cc = v.EE - RE * RE, disc = B * B - 4 * Cc; if (disc < 0) return null;
+  const s = (-B - Math.sqrt(disc)) / 2; if (s < 0) return null;
+  return [v.E[0] + s * d[0], v.E[1] + s * d[1], v.E[2] + s * d[2]];
+}
+
 /** Inertia, animated re-orientation, follow mode and pivot easing. */
 export function updateCam(fp: Vec3 | null, dragging: boolean): void {
   const c = S.cam;

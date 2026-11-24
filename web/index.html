@@ -20,6 +20,7 @@
     <div class="seg" id="pivot" title="What the camera orbits around"><button data-v="earth" aria-pressed="true">Orbit Earth</button><button data-v="focus" aria-pressed="false">Orbit focus</button></div>
     <button id="north" class="wide" title="Level the horizon with north up">N↑</button>
     <button id="follow" class="wide" aria-pressed="true" title="Keep the camera on the focused object">Follow</button>
+    <button id="theme" class="wide" title="Switch between light and dark">◐</button>
     <button id="zin" aria-label="Zoom in">+</button>
     <button id="zout" aria-label="Zoom out">−</button>
   </div>
@@ -33,7 +34,8 @@
     <span><i class="dot" style="background:var(--panel);box-shadow:0 0 0 2px var(--blue)"></i>Stereo partner</span>
     <span><i class="dot" style="background:var(--sv);border-radius:1px"></i>Fire-control SV</span>
     <span><i class="dot" style="background:var(--bal)"></i>Ballistic RV</span>
-    <span><i class="dot" style="background:var(--hgv)"></i>HGV</span>
+    <span><i class="dot" style="background:var(--hgv)"></i>HGV / named system</span>
+    <span><i class="dot" style="background:var(--mda-sm3);border-radius:1px"></i>Defense element · hover</span>
   </div>
   <div class="play">
     <button id="restart" aria-label="Restart">⏮</button>
@@ -63,6 +65,11 @@
     <div class="lbl">Re-entry vehicle mix</div>
     <div class="seg" id="mix"></div>
     <label class="chk"><input type="checkbox" id="errant" checked> One RV falls short into the ocean <span style="color:var(--muted);font-size:10.5px">(salvos of 5+)</span></label>
+    <div class="lbl">Threat system <span style="text-transform:none;letter-spacing:0">for the HGVs in the mix</span></div>
+    <select id="sysSel" class="msel" aria-label="Threat system"></select>
+    <div id="manWrap" hidden><div class="lbl">Maneuver</div><select id="manSel" class="msel" aria-label="Maneuver"></select></div>
+    <p class="arch-note" id="sysHint"></p>
+    <details class="src" id="sysCard" hidden><summary>System details</summary><dl class="kv sysdl" id="sysBody"></dl><p class="arch-note">From the HGV Data Comp (17 Jul 2025), public sources. Flight parameters are notional.</p></details>
   </div>
 
   <details class="sec" id="arch">
@@ -77,6 +84,7 @@
     <div class="checks">
       <label><input type="checkbox" id="rings" checked> Orbit rings</label>
       <label><input type="checkbox" id="alllos"> LOS for all threats</label>
+      <label><input type="checkbox" id="sun" checked> Day / night</label>
     </div>
   </details>
 
@@ -111,6 +119,28 @@
         <button class="copy" id="copySchema">Copy example</button>
       </details>
     </div>
+  </details>
+
+  <details class="sec" id="mdaSec" open>
+    <summary>Missile defense <span class="src-tag" style="margin-left:auto;margin-right:8px;font-weight:400;color:var(--muted)">notional</span></summary>
+    <label class="chk"><input type="checkbox" id="mdaEngage" checked> Engage threats</label>
+    <p class="mda-sum" id="mdaSum"></p>
+    <p class="arch-note">A threat gets a fire-control space track once custody holds <b>stereo for 30 s</b>; ground and ship radars can track it too. The first track starts the C2BMC fire-control solution, so custody gaps and outages delay or deny engagements.</p>
+    <div class="lbl">Outcome</div>
+    <select id="mdaOut" class="msel" aria-label="Engagement outcome"></select>
+    <div class="btnrow" id="mdaPkRow" hidden><span class="lbl" style="margin:0">Per-round Pk</span><input id="mdaPk" type="number" min="0.05" max="0.99" step="0.05" value="0.7" class="msel"><button id="mdaReroll" title="Draw new random outcomes with the same Pk">Re-roll</button></div>
+    <div class="lbl">Shot doctrine</div>
+    <div class="docgrid" id="mdaDoc"></div>
+    <div class="lbl">Elements</div>
+    <div class="chips" id="mdaOn"></div>
+    <div class="lbl">Radar fans</div>
+    <div class="btnrow"><div class="seg" id="mdaFans" style="flex:1" title="Which radar fans to draw"><button data-v="focus" aria-pressed="true" title="Radars tracking the focused threat">Focus</button><button data-v="tracking" aria-pressed="false" title="Every radar that tracks a threat">Tracking</button><button data-v="all" aria-pressed="false">All</button><button data-v="none" aria-pressed="false">None</button></div>
+      <div class="seg" id="mdaFanEl" title="Fan elevation"><button data-v="1" aria-pressed="false">1°</button><button data-v="3" aria-pressed="true">3°</button><button data-v="10" aria-pressed="false">10°</button></div></div>
+    <div class="lbl">Aegis BMD ships <span style="text-transform:none;letter-spacing:0">positions notional</span></div>
+    <div class="btnrow"><button id="mdaPlace" aria-pressed="false">+ Place ship</button><button id="mdaClear">Clear placed ships</button></div>
+    <ul class="mships" id="mdaShips"></ul>
+    <details class="src" open><summary>Engagements by threat</summary><table class="mtab" id="mdaTable"></table></details>
+    <p class="arch-note">Built from public information. Ranges, speeds, magazines and timelines are round planning numbers for illustration; radar sector orientations are approximate. Real Aegis ship positions aren't public. The Glide Phase Interceptor is a future capability. Discrimination and decoys aren't modeled, and custody statistics cover each threat's full planned flight.</p>
   </details>
 
   <div class="big">
