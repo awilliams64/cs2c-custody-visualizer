@@ -2,7 +2,7 @@
 import { proj, pt, setCam, updateCam, view, type ScreenPt } from './camera';
 import { DT, R2D, RE } from './constants';
 import { $ } from './dom';
-import { allSatPos, ringPoint, satPos } from './orbits';
+import { allSatPos, realRing, ringPoint, satPos } from './orbits';
 import { MODEL, S, sim } from './state';
 import { C } from './theme';
 import { threatState } from './threats';
@@ -133,6 +133,13 @@ export function render(t: number, k: number, dragging: boolean): void {
         satPos(ringPoint(s, i * 2 * Math.PI / 96), t, tmp, 0); proj(tmp[0], tmp[1], tmp[2], P);
         if (!P[3]) { if (pen) g.lineTo(P[0], P[1]); else g.moveTo(P[0], P[1]); pen = true; } else pen = false;
       }
+      g.stroke();
+    });
+    // real SVs: one ring each (LEO and HEO; GEO rings sit on the equator and add nothing)
+    sats.forEach(s => {
+      if (s.kind !== 'r' || s.group === 'GEO') return;
+      g.beginPath(); let pen = false;
+      for (const q of realRing(s, t)) { proj(q[0], q[1], q[2], P); if (!P[3]) { if (pen) g.lineTo(P[0], P[1]); else g.moveTo(P[0], P[1]); pen = true; } else pen = false; }
       g.stroke();
     });
     g.globalAlpha = 1;

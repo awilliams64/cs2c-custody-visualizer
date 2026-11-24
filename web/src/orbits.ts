@@ -1,5 +1,6 @@
 // Sensor constellations: Walker shells (LEO/MEO), fixed GEO slots and Molniya-type polar SVs, in Earth-fixed coordinates.
 import { ARCH } from './config';
+import { realPos, realSats } from './catalog';
 import { D2R, MU, RE, WE } from './constants';
 import { pad } from './format';
 import { S, sim } from './state';
@@ -18,6 +19,12 @@ export function buildSats(): void {
     }
   };
   const A = ARCH[S.arch];
+  if (A.real) realSats().forEach(r => {
+    if (!S.layers[r.group]) return;
+    const nRad = r.rec.no / 60; // rad/s
+    sats.push({ kind: 'r', id: r.id, group: r.group, layer: r.layer, idx: 0, a: r.rec.a * RE, rec: r.rec, name: r.name, norad: r.norad, epoch: r.epoch, notional: r.notional, note: r.note, period: 2 * Math.PI / nRad });
+  });
+  if (A.real) { sats.forEach((s, i) => { s.idx = i; }); sim.sats = sats; return; }
   if (S.layers.LEO) A.leo.forEach(([pre, P, Sp, off, fc]) => walker('LEO', pre, 1000, 81, P, Sp, 1, off, fc));
   if (S.layers.MEO) A.meo.forEach(([pre, P, Sp, off]) => walker('MEO', pre, 8000, 55, P, Sp, 1, off, () => false));
   if (S.layers.GEO) [10, 75, 140, -135, -60].forEach((lo, i) => sats.push({ id: `GEO-${i + 1}`, group: 'GEO', layer: 'GEO', kind: 'g', idx: 0, a: 42164, lon: lo * D2R }));
@@ -32,6 +39,7 @@ export function buildSats(): void {
 
 /** Earth-fixed position (km) of satellite s at time t, written into out[o..o+2]. */
 export function satPos(s: Sat, t: number, out: Float64Array | number[], o: number): void {
+  if (s.kind === 'r') { realPos(s.rec, S.epoch + t * 1000, out, o); return; }
   if (s.kind === 'g') { out[o] = s.a * Math.cos(s.lon); out[o + 1] = s.a * Math.sin(s.lon); out[o + 2] = 0; return; }
   const cO = Math.cos(s.raan), sO = Math.sin(s.raan);
   let x: number, y: number, z: number;
@@ -56,3 +64,14 @@ export function allSatPos(t: number, buf: Float64Array): Float64Array {
 
 /** A copy of a circular-orbit SV shifted along its orbit (used to draw orbit rings). */
 export const ringPoint = (s: CircSat, dm: number): CircSat => ({ ...s, m0: s.m0 + dm });
+
+/** Orbit ring of a real SV at time t, in the Earth-fixed frame of that moment (n points over one period). */
+export function realRing(s: Extract<Sat, { kind: 'r' }>, t: number, n = 96): number[][] {
+  const pts: number[][] = [], tmp = [0, 0, 0];
+  for (let i = 0; i <= n; i++) {
+    const dt = s.period * i / n; realPos(s.rec, S.epoch + (t + dt) * 1000, tmp, 0);
+    const th = WE * dt, c = Math.cos(th), sn = Math.sin(th); // undo Earth rotation over dt
+    pts.push([tmp[0] * c - tmp[1] * sn, tmp[0] * sn + tmp[1] * c, tmp[2]]);
+  }
+  return pts;
+}

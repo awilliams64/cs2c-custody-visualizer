@@ -19,6 +19,7 @@ import { MANEUVERS, PROFILE_LABEL, REGION_SYS, SYS } from './systems';
 import { esc } from './format';
 import { DOC_TYPES, MDA, OUTCOMES, initDefenseInput, placeAt } from './mda';
 import { buildEvents } from './events';
+import { refreshElements } from './catalog';
 import { globeCanvas } from './render';
 import type { Focus, Group, Source } from './types';
 import { buildLists, forceUI, refreshSummary, setSource, updateArchPanel, updateUI } from './ui';
@@ -154,6 +155,12 @@ $('#mdaPlace').onclick = () => { MDA.placing = !MDA.placing; document.body.class
 $('#mdaClear').onclick = () => { MDA.userShips = []; replanDefense(); };
 $('#mdaTable').addEventListener('click', e => { const tr = (e.target as Element).closest<HTMLElement>('[data-j]'); if (tr) setFocus({ kind: 'threat', i: +tr.dataset.j! }); });
 initDefenseInput(globeCanvas, replanDefense);
+/* real satellites: cached elements on load, live pull on request */
+$('#archRefresh').onclick = () => {
+  const b = $<HTMLButtonElement>('#archRefresh'); b.disabled = true; b.textContent = 'Fetching…';
+  refreshElements(true).then(() => { b.disabled = false; b.textContent = 'Refresh elements from CelesTrak'; queueRebuild(true); });
+};
+refreshElements(false).then(ok => { if (ok && ARCH[S.arch].real) queueRebuild(true); });
 $<HTMLInputElement>('#sun').onchange = e => { S.sun = (e.target as HTMLInputElement).checked; };
 /* light / dark: follows the system until the user picks one */
 const applyTheme = (v: string | null) => { if (v) document.documentElement.setAttribute('data-theme', v); else document.documentElement.removeAttribute('data-theme'); };

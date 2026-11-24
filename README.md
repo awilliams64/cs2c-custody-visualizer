@@ -19,7 +19,8 @@ The published page is a single self-contained HTML file (`index.html`): open it 
 
 ## What it shows
 
-- **Sensor architecture (PWSA-based):** three build-outs drawn from public reporting:
+- **Sensor architecture (PWSA-based):** today's real satellites plus three build-outs drawn from public reporting:
+  - **Today (real):** the sensor satellites on orbit now, propagated with SGP4 ([satellite.js](https://github.com/shashwatak/satellite-js)) from public element sets: SDA Tracking Layer Tranche 0 (4 SpaceX, 4 L3Harris) and 6 SBIRS GEO. SBIRS HEO hosts have no public elements, so 2 notional Molniya orbits stand in. A built-in snapshot (13–23 Nov 2026) is used until *Refresh elements from CelesTrak* pulls the latest (cached 2 h). T+00:00 is page-load UTC.
   - **T1 (~2027):** SDA Tracking Layer Tranche 1 (35 LEO SVs, 5 planes, 1,000 km) + MEO Epoch 1 (12 SVs, 2 planes) + OPIR GEO + Next-Gen OPIR Polar.
   - **T1+T2 (~2029):** adds Tranche 2 (54 SVs: 48 wide field of view + 6 fire-control) and MEO Epoch 2 (10 SVs).
   - **T1–T3 (FY29+):** adds Tranche 3 (72 SVs, about half missile-defense / fire-control).

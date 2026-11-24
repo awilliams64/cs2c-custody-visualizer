@@ -1,5 +1,6 @@
 // Shared types for the CS2C Custody Visualizer.
 import type { Maneuver, SysFlight } from './systems';
+import type { SatRec } from '../node_modules/satellite.js/dist/propagation/SatRec.js';
 
 export type Vec3 = [number, number, number];
 export type Quat = [number, number, number, number];
@@ -19,7 +20,9 @@ interface SatBase { id: string; group: Group; layer: Layer; idx: number; a: numb
 export interface CircSat extends SatBase { kind: 'c'; n: number; ci: number; si: number; raan: number; m0: number; plane: number; ring: string }
 export interface GeoSat extends SatBase { kind: 'g'; lon: number }
 export interface EllSat extends SatBase { kind: 'e'; e: number; n: number; ci: number; si: number; raan: number; w: number; m0: number }
-export type Sat = CircSat | GeoSat | EllSat;
+/** Real satellite propagated with SGP4 from public elements ("Today" architecture). */
+export interface RealSat extends SatBase { kind: 'r'; rec: SatRec; name: string; norad: string; epoch: number; notional: boolean; note: string; period: number }
+export type Sat = CircSat | GeoSat | EllSat | RealSat;
 
 export interface Site { name: string; lat: number; lon: number; p: Vec3 }
 

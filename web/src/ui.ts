@@ -10,6 +10,7 @@ import { applySource, fileStatusText } from './tasking';
 import { threatState } from './threats';
 import { MANEUVERS, PROFILE_LABEL, SYS } from './systems';
 import { defenseHtml, isDestroyed, refreshDefensePanel } from './mda';
+import { catalogSrc } from './catalog';
 import type { Band, Focus, Source, StepRec, Threat, ThreatState, Vis } from './types';
 
 const STATUS_TXT = ['Custody gap', 'Mono custody', 'Stereo custody'];
@@ -192,6 +193,13 @@ export function buildLists(onFocus: (f: NonNullable<Focus>) => void): void {
 /** Architecture note and per-layer SV counts in the Sensor architecture section. */
 export function updateArchPanel(): void {
   $('#archNote').innerHTML = ARCH[S.arch].note;
+  const real = !!ARCH[S.arch].real;
+  $('#archSrc').hidden = $('#archRefresh').hidden = !real;
+  if (real) {
+    const ages = sim.sats.filter(s => s.kind === 'r' && !s.notional).map(s => (S.epoch - (s as { epoch: number }).epoch) / 864e5);
+    const oldest = ages.length ? Math.max(...ages) : 0;
+    $('#archSrc').innerHTML = `Elements: ${esc(catalogSrc.text)}${ages.length ? ` · oldest ${oldest < 1 ? Math.round(oldest * 24) + ' h' : Math.round(oldest) + ' d'}` : ''}<br>T+00:00 = ${new Date(S.epoch).toISOString().slice(0, 16).replace('T', ' ')} UTC (page load)`;
+  }
   (Object.keys(S.layers) as (keyof typeof S.layers)[]).forEach(l => {
     const sm = document.querySelector(`#ly-${l}~small`);
     if (sm) sm.textContent = S.layers[l] ? `${sim.sats.filter(s => s.group === l).length} SVs` : 'off';

@@ -34,13 +34,15 @@ export const GROUP_LABEL: Record<Group, string> = { LEO: 'SDA Tracking Layer · 
 /** Walker shell: prefix, planes, SVs per plane, RAAN offset (fraction of spacing), fire-control rule. */
 export type LeoShell = [pre: string, planes: number, perPlane: number, raanOff: number, isFC: (plane: number, slot: number) => boolean];
 export type MeoShell = [pre: string, planes: number, perPlane: number, raanOff: number];
-export interface Arch { label: string; year: string; leo: LeoShell[]; meo: MeoShell[]; note: string }
+export interface Arch { label: string; year: string; leo: LeoShell[]; meo: MeoShell[]; note: string; real?: boolean }
 
 // PWSA build-outs. Counts are public; plane splits for T2/T3, inclination and MEO altitude are assumptions.
 const T1: LeoShell = ['T1', 5, 7, 0, () => false];
 const T2: LeoShell = ['T2', 6, 9, 0.5, (_j, k) => k === 0];
 const T3: LeoShell = ['T3', 8, 9, 0.25, (j) => j % 2 === 0];
 export const ARCH: Record<string, Arch> = {
+  now: { label: 'Today', year: 'real', leo: [], meo: [], real: true,
+    note: '<b>Today</b>, from public element sets: SDA Tracking Layer <b>Tranche 0</b> (4 SpaceX and 4 L3Harris wide field of view SVs) and <b>6 SBIRS GEO</b>, propagated with SGP4 from the scenario start time. SBIRS HEO payloads ride classified hosts, so 2 notional Molniya orbits stand in. No MEO or Tranche 1 tracking SVs are on orbit yet, and the Transport layer carries no IR sensors. Expect mono custody and gaps: this is what CS2C works with now.' },
   t1: { label: 'T1', year: '~2027', leo: [T1], meo: [['E1', 2, 6, 0]],
     note: '<b>Tranche 1</b>: 35 LEO tracking SVs in 5 planes, with <b>MEO Epoch 1</b> (12 SVs, 2 planes), GEO and polar. Near-global mono coverage, stereo where MEO overlaps.' },
   t2: { label: 'T1+T2', year: '~2029', leo: [T1, T2], meo: [['E1', 2, 6, 0], ['E2', 2, 5, 0.5]],
