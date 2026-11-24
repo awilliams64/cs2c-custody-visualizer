@@ -61,7 +61,11 @@ export interface Baseline { best: number; partner: number; theta: number; status
 export type Priority = 'High' | 'Medium' | 'Low';
 /** Predicted impact point (IPP) assessment for a threat at one step. */
 export interface Assessment {
-  priority: Priority; ippLat: number; ippLon: number; radiusKm: number;
+  priority: Priority; ippLat: number; ippLon: number;
+  /** Equal-area radius of the uncertainty ellipse (km). */
+  radiusKm: number;
+  /** Uncertainty ellipse semi-axes (km): downrange (along the flight path) and cross-range, and the downrange heading (deg from north). */
+  alongKm: number; crossKm: number; headingDeg: number;
   nearest: string; nearestKm: number; reliable: boolean;
   /** Track value V(q) in 0..1 = threat-type weight x impact-location weight (notional). */
   value: number; typeWeight: number; locWeight: number; typeClass: string; locClass: string;

@@ -18,8 +18,8 @@ const snap = (r: StepRec): Snap => ({ best: r.best, partner: r.partner, bandP: r
 const round = (km: number, to: number) => fmtN(Math.round(km / to) * to);
 function priorityText(th: Threat, a: Assessment): string {
   const v = a.value.toFixed(2);
-  if (a.priority === 'Low') return `IPP ${th.errant ? 'in open ocean' : 'clear'}, ~${round(a.nearestKm, 100)} km from ${a.nearest} (±${round(a.radiusKm, 10)} km) · value → ${v}, monitor only`;
-  if (a.priority === 'Medium') return `IPP refining, ~${round(a.nearestKm, 100)} km from ${a.nearest} (±${round(a.radiusKm, 50)} km) · value → ${v}`;
+  if (a.priority === 'Low') return `IPP ${th.errant ? 'in open ocean' : 'clear'}, ~${round(a.nearestKm, 100)} km from ${a.nearest} (±${round(a.alongKm, 10)} × ${round(a.crossKm, 10)} km) · value → ${v}, monitor only`;
+  if (a.priority === 'Medium') return `IPP refining, ~${round(a.nearestKm, 100)} km from ${a.nearest} (±${round(a.alongKm, 50)} × ${round(a.crossKm, 50)} km) · value → ${v}`;
   return `IPP could reach ${a.nearest} · value → ${v}`;
 }
 

@@ -241,16 +241,23 @@ export function render(t: number, k: number, dragging: boolean): void {
   drawLos(rec, fp, true);
   // predicted impact point and its uncertainty for the focused threat
   if (rec && rec.assess && S.focus && S.focus.kind === 'threat') {
+    // uncertainty ellipse: semi-axes downrange (along the flight path) and cross-range, on the Earth's surface
     const a = rec.assess, c = llv(a.ippLat, a.ippLon), cu = unit(c);
-    const ax = unit(cross(cu, Math.abs(cu[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0])), ay = cross(cu, ax), d = Math.min(a.radiusKm, 3000) / RE;
+    const east = unit(cross([0, 0, 1], cu)), north = cross(cu, east), hd = a.headingDeg * Math.PI / 180;
+    const ax: Vec3 = [north[0] * Math.cos(hd) + east[0] * Math.sin(hd), north[1] * Math.cos(hd) + east[1] * Math.sin(hd), north[2] * Math.cos(hd) + east[2] * Math.sin(hd)], ay = cross(cu, ax);
     const col = a.priority === 'High' ? C.bad : a.priority === 'Medium' ? C.gold : C.muted;
     g.strokeStyle = col; g.lineWidth = 1.2; g.setLineDash([4, 4]); g.globalAlpha = 0.8; g.beginPath(); let pen = false;
-    for (let i = 0; i <= 72; i++) {
-      const th2 = i / 72 * Math.PI * 2, cd = Math.cos(d), sd = Math.sin(d), cx = Math.cos(th2), sy = Math.sin(th2);
-      const p: Vec3 = [RE * (cd * cu[0] + sd * (cx * ax[0] + sy * ay[0])), RE * (cd * cu[1] + sd * (cx * ax[1] + sy * ay[1])), RE * (cd * cu[2] + sd * (cx * ax[2] + sy * ay[2]))];
+    for (let i = 0; i <= 96; i++) {
+      const th2 = i / 96 * Math.PI * 2, ex = a.alongKm * Math.cos(th2), ey = a.crossKm * Math.sin(th2), dk = Math.hypot(ex, ey), d = dk / RE;
+      const ux = ex / (dk || 1), uy = ey / (dk || 1), cd = Math.cos(d), sd = Math.sin(d);
+      const p: Vec3 = [0, 1, 2].map(n => RE * (cd * cu[n] + sd * (ux * ax[n] + uy * ay[n]))) as Vec3;
       proj(p[0], p[1], p[2], P); if (!P[3]) { if (pen) g.lineTo(P[0], P[1]); else g.moveTo(P[0], P[1]); pen = true; } else pen = false;
     }
     g.stroke(); g.setLineDash([]);
+    // downrange axis, faint
+    g.globalAlpha = 0.35; g.beginPath(); pen = false;
+    for (const sgn of [-1, 1]) { const d = sgn * a.alongKm / RE, p: Vec3 = [0, 1, 2].map(n => RE * (Math.cos(d) * cu[n] + Math.sin(d) * ax[n])) as Vec3; proj(p[0], p[1], p[2], P); if (!P[3]) { if (pen) g.lineTo(P[0], P[1]); else g.moveTo(P[0], P[1]); pen = true; } }
+    g.stroke(); g.globalAlpha = 0.8;
     proj(c[0], c[1], c[2], P);
     if (!P[3]) { g.lineWidth = 1.5; g.beginPath(); g.moveTo(P[0] - 5, P[1]); g.lineTo(P[0] + 5, P[1]); g.moveTo(P[0], P[1] - 5); g.lineTo(P[0], P[1] + 5); g.stroke(); label(g, 'IPP', P[0] + 7, P[1] - 5, col, 9.5, true); }
     g.globalAlpha = 1;
