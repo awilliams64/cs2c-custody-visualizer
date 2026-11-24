@@ -15,6 +15,12 @@ import { MODEL, S, sim } from './state';
 import { applySource, knockOut, parseSelections, recomputeSelection } from './tasking';
 import { onThemeChange, readTokens } from './theme';
 import { buildThreats } from './threats';
+import { MANEUVERS, PROFILE_LABEL, REGION_SYS, SYS } from './systems';
+import { esc } from './format';
+import { DOC_TYPES, MDA, OUTCOMES, initDefenseInput, placeAt } from './mda';
+import { buildEvents } from './events';
+import { refreshElements } from './catalog';
+import { globeCanvas } from './render';
 import type { Focus, Group, Source } from './types';
 import { buildLists, forceUI, refreshSummary, setSource, updateArchPanel, updateUI } from './ui';
 
@@ -59,10 +65,29 @@ let scrubbing = false;
 $('#regions').innerHTML = Object.entries(REGIONS).map(([k, r]) => `<button class="region" data-v="${k}" aria-pressed="${S.region === k}"><b>${r.name}</b><span>${r.sites.length} sites · ${r.targets.length} aimpoints</span></button>`).join('');
 $('#regions').onclick = e => {
   const b = (e.target as Element).closest<HTMLButtonElement>('button'); if (!b) return;
-  S.region = b.dataset.v!; [...$('#regions').children].forEach(c => c.setAttribute('aria-pressed', String(c === b))); queueRebuild(false);
+  S.region = b.dataset.v!; [...$('#regions').children].forEach(c => c.setAttribute('aria-pressed', String(c === b)));
+  if (!REGION_SYS[S.region].includes(S.sys)) S.sys = 'generic';
+  sysUI(); queueRebuild(false);
 };
+/* threat system and maneuver */
+function sysUI(): void {
+  $('#sysSel').innerHTML = `<option value="generic">Generic glide vehicle</option>` + REGION_SYS[S.region].map(k => `<option value="${k}">${esc(SYS[k].name)} · ${esc(SYS[k].platform)}</option>`).join('');
+  $<HTMLSelectElement>('#sysSel').value = S.sys;
+  const sys = S.sys !== 'generic' ? SYS[S.sys] : null;
+  $('#manWrap').hidden = !sys; $('#sysCard').hidden = !sys;
+  if (sys) {
+    $('#manSel').innerHTML = `<option value="auto">System default · ${esc(MANEUVERS[sys.m.man])}</option>` + Object.entries(MANEUVERS).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join('');
+    $<HTMLSelectElement>('#manSel').value = S.man;
+    const rows: [string, string][] = [['Designation', sys.desig], ['Country', sys.country], ['Status', sys.ready], ['Platform', sys.platform], ['Profile', PROFILE_LABEL[sys.m.profile]],
+      ['Altitude', sys.alt], ['Speed', sys.speed], ['Range', sys.range], ['Glide', sys.glide], ['Tested', sys.tested], ['Maneuver', sys.maneuver]];
+    $('#sysBody').innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('') + (sys.src ? `<dt>Source</dt><dd><a href="${esc(sys.src)}" target="_blank" rel="noopener">link ↗</a></dd>` : '');
+  }
+  $('#sysHint').innerHTML = sys && S.mix === 'bal' ? 'Pick <b>HGV</b> or <b>Mixed</b> to fly this system.' : sys ? `HGV threats fly the ${esc(sys.name)} profile (${PROFILE_LABEL[sys.m.profile]}).` : '';
+}
+$<HTMLSelectElement>('#sysSel').onchange = e => { S.sys = (e.target as HTMLSelectElement).value; S.man = 'auto'; sysUI(); queueRebuild(false); };
+$<HTMLSelectElement>('#manSel').onchange = e => { S.man = (e.target as HTMLSelectElement).value; queueRebuild(false); };
 seg($('#salvo'), [[1, '1'], [5, '5'], [10, '10'], [20, '20']], 'salvo', () => queueRebuild(false));
-seg($('#mix'), [['bal', 'Ballistic'], ['hgv', 'HGV'], ['mixed', 'Mixed']], 'mix', () => queueRebuild(false));
+seg($('#mix'), [['bal', 'Ballistic'], ['hgv', 'HGV'], ['mixed', 'Mixed']], 'mix', () => { sysUI(); queueRebuild(false); });
 $<HTMLInputElement>('#errant').onchange = e => { S.errant = (e.target as HTMLInputElement).checked; queueRebuild(false); };
 seg($('#arch-seg'), Object.entries(ARCH).map(([k, a]) => [k, `${a.label} <small style="opacity:.6">${a.year}</small>`]), 'arch', () => queueRebuild(true));
 const groups = Object.keys(S.layers) as Group[];
@@ -101,6 +126,50 @@ $('#clearOut').onclick = () => { sim.outages = []; afterOutageChange(); };
   el.addEventListener('toggle', () => { try { localStorage.setItem('cs2c-' + id, el.open ? '1' : '0'); } catch { /* ignore */ } forceUI(); drawStrips(); });
 });
 $('#srcSeg').onclick = e => { const b = (e.target as Element).closest<HTMLButtonElement>('button'); if (b) { setSource(b.dataset.v as Source); tick(true); } };
+
+/* ---------- missile defense ---------- */
+function replanDefense(): void { buildEvents(); refreshSummary(); forceUI(); }
+$<HTMLInputElement>('#mdaEngage').onchange = e => { MDA.engage = (e.target as HTMLInputElement).checked; replanDefense(); };
+$('#mdaOut').innerHTML = Object.entries(OUTCOMES).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join('');
+$<HTMLSelectElement>('#mdaOut').value = MDA.outcome;
+$<HTMLSelectElement>('#mdaOut').onchange = e => { MDA.outcome = (e.target as HTMLSelectElement).value as typeof MDA.outcome; $('#mdaPkRow').hidden = MDA.outcome !== 'pk'; replanDefense(); };
+$<HTMLInputElement>('#mdaPk').onchange = e => { const v = +(e.target as HTMLInputElement).value; if (v > 0 && v < 1) { MDA.pk = v; replanDefense(); } };
+$('#mdaReroll').onclick = () => { MDA.seed++; replanDefense(); };
+$('#mdaDoc').innerHTML = Object.entries(DOC_TYPES).map(([k, l]) => `<span>${l}</span><div class="seg" data-doc="${k}"><button data-v="SLS" aria-pressed="true" title="Shoot-look-shoot: one round, assess, then re-engage">S-L-S</button><button data-v="SSL" aria-pressed="false" title="Shoot-shoot-look: ripple two rounds, then assess">S-S-L</button></div>`).join('');
+$('#mdaDoc').onclick = e => {
+  const b = (e.target as Element).closest<HTMLButtonElement>('button'), sg = b && b.closest<HTMLElement>('[data-doc]'); if (!b || !sg) return;
+  MDA.doctrine[sg.dataset.doc as keyof typeof DOC_TYPES] = b.dataset.v as 'SLS' | 'SSL';
+  [...sg.children].forEach(c => c.setAttribute('aria-pressed', String(c === b))); replanDefense();
+};
+const CHIPS: [string, string, string][] = [['gmd', 'GMD', 'gbi'], ['ships', 'Aegis ships', 'sm3'], ['ashore', 'Aegis Ashore', 'sm3'], ['thaad', 'THAAD', 'thaad'], ['pac3', 'PAC-3', 'pac3'],
+  ['gpi', 'GPI (future)', 'gpi'], ['radars', 'Radars', 'radar'], ['c2', 'C2BMC', 'c2'], ['rings', 'Coverage rings', 'radar'], ['ports', 'Homeports', 'sm3']];
+$('#mdaOn').innerHTML = CHIPS.map(([k, l, c]) => `<button data-k="${k}" aria-pressed="${MDA.on[k]}"><i style="background:var(--mda-${c})"></i>${l}</button>`).join('');
+$('#mdaOn').onclick = e => {
+  const b = (e.target as Element).closest<HTMLButtonElement>('button'); if (!b) return;
+  const k = b.dataset.k!; MDA.on[k] = !MDA.on[k]; b.setAttribute('aria-pressed', String(MDA.on[k]));
+  if (k !== 'rings' && k !== 'ports') replanDefense();
+};
+$('#mdaFans').onclick = e => { const b = (e.target as Element).closest<HTMLButtonElement>('button'); if (!b) return; MDA.fans = b.dataset.v as typeof MDA.fans; [...$('#mdaFans').children].forEach(c => c.setAttribute('aria-pressed', String(c === b))); };
+$('#mdaFanEl').onclick = e => { const b = (e.target as Element).closest<HTMLButtonElement>('button'); if (!b) return; MDA.fanEl = +b.dataset.v!; [...$('#mdaFanEl').children].forEach(c => c.setAttribute('aria-pressed', String(c === b))); };
+$('#mdaPlace').onclick = () => { MDA.placing = !MDA.placing; document.body.classList.toggle('placing', MDA.placing); $('#mdaPlace').setAttribute('aria-pressed', String(MDA.placing)); };
+$('#mdaClear').onclick = () => { MDA.userShips = []; replanDefense(); };
+$('#mdaTable').addEventListener('click', e => { const tr = (e.target as Element).closest<HTMLElement>('[data-j]'); if (tr) setFocus({ kind: 'threat', i: +tr.dataset.j! }); });
+initDefenseInput(globeCanvas, replanDefense);
+/* real satellites: cached elements on load, live pull on request */
+$('#archRefresh').onclick = () => {
+  const b = $<HTMLButtonElement>('#archRefresh'); b.disabled = true; b.textContent = 'Fetching…';
+  refreshElements(true).then(() => { b.disabled = false; b.textContent = 'Refresh elements from CelesTrak'; queueRebuild(true); });
+};
+refreshElements(false).then(ok => { if (ok && ARCH[S.arch].real) queueRebuild(true); });
+$<HTMLInputElement>('#sun').onchange = e => { S.sun = (e.target as HTMLInputElement).checked; };
+/* light / dark: follows the system until the user picks one */
+const applyTheme = (v: string | null) => { if (v) document.documentElement.setAttribute('data-theme', v); else document.documentElement.removeAttribute('data-theme'); };
+try { applyTheme(localStorage.getItem('cs2c-theme')); } catch { /* storage unavailable */ }
+$('#theme').onclick = () => {
+  const cur = document.documentElement.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  const next = cur === 'dark' ? 'light' : 'dark'; applyTheme(next);
+  try { localStorage.setItem('cs2c-theme', next); } catch { /* ignore */ }
+};
 
 /* ---------- CS2C picks: file, JS API, live link, observation export ---------- */
 function loadPicks(obj: unknown, name: string): void { MODEL.file = parseSelections(obj, name); setSource('file'); }
@@ -164,7 +233,8 @@ function loop(now: number): void {
   } catch (err) { console.error(err); }
 }
 
+sysUI();
 setSource('sim');
-initInput(setFocus, togglePlay);
+initInput(setFocus, togglePlay, p => { if (!placeAt(p)) return false; replanDefense(); return true; });
 resize(); rebuild(false); retheme(); setPP();
 requestAnimationFrame(loop);

@@ -8,6 +8,9 @@ import { focusRec } from './render';
 import { MODEL, S, sim } from './state';
 import { applySource, fileStatusText } from './tasking';
 import { threatState } from './threats';
+import { MANEUVERS, PROFILE_LABEL, SYS } from './systems';
+import { defenseHtml, isDestroyed, refreshDefensePanel } from './mda';
+import { catalogSrc } from './catalog';
 import type { Band, Focus, Source, StepRec, Threat, ThreatState, Vis } from './types';
 
 const STATUS_TXT = ['Custody gap', 'Mono custody', 'Stereo custody'];
@@ -98,15 +101,18 @@ function focusHtml(k: number): string {
   const isT = f.kind === 'threat', th = isT ? sim.threats[f.i] : null, site = isT ? null : sim.sites[f.i];
   const st = th ? threatState(th, S.t) : null;
   const chip = th ? `<span class="chip ${th.type}">${th.id}</span>` : '<span class="chip S">SITE</span>';
-  const title = th ? `${th.type === 'B' ? 'Ballistic RV' : 'Hypersonic glide vehicle'}<small>${th.siteName} → ${dest(th, r)}${th.errant && !isLow(r) && S.t < th.tEnd ? '' : ` · ${fmtN(th.D)} km`}</small>`
+  const title = th ? `${th.type === 'B' ? 'Ballistic RV' : th.sys ? `${SYS[th.sys].name} <span class="src-tag">${PROFILE_LABEL[SYS[th.sys].m.profile]}</span>` : 'Hypersonic glide vehicle'}<small>${th.siteName} → ${dest(th, r)}${th.errant && !isLow(r) && S.t < th.tEnd ? '' : ` · ${fmtN(th.D)} km`}</small>`
     : `${site!.name}<small>Launch watch · ${site!.lat.toFixed(2)}°, ${site!.lon.toFixed(2)}°</small>`;
-  let html = `<div class="fh">${chip}<div class="name">${title}</div>${pill(r, th)}</div>`;
-  if (th && !st) return html + `<dl class="kv"><dt>Status</dt><dd>${S.t < th.tL ? `Launch at T+${fmtT(th.tL)}` : 'Impacted'}</dd></dl>`;
+  const dead = !!th && isDestroyed(f.i, S.t);
+  let html = `<div class="fh">${chip}<div class="name">${title}</div>${dead ? '<span class="pill sk">Destroyed</span>' : pill(r, th)}</div>`;
+  if (dead) return html + defenseHtml(f.i);
+  if (th && !st) return html + `<dl class="kv"><dt>Status</dt><dd>${S.t < th.tL ? `Launch at T+${fmtT(th.tL)}` : 'Impacted'}</dd></dl>` + defenseHtml(f.i);
   if (!r) return html;
   const B = r.bestV, bs = r.best >= 0 ? sim.sats[r.best] : null, ps = r.partner >= 0 ? sim.sats[r.partner] : null;
   const pickTag = ({ base: 'baseline', sim: 'simulated', file: 'CS2C', none: 'baseline · no CS2C pick' } as const)[r.picked];
   html += `<dl class="kv">
-    <dt>Phase</dt><dd>${PHASE_LABEL[st ? st.phase : 'watch']}${st ? ` · ${fmtN(st.h)} km alt` : ''}</dd>
+    <dt>Phase</dt><dd>${th && th.flight && st ? esc(th.flight.samples[Math.round(S.t - th.tL)].label) : PHASE_LABEL[st ? st.phase : 'watch']}${st ? ` · ${fmtN(st.h)} km alt` : ''}${th && th.flight && st ? ` · ~Mach ${Math.round(th.flight.samples[Math.round(S.t - th.tL)].v / 0.3)}` : ''}</dd>
+    ${th && th.man ? `<dt>Maneuver</dt><dd>${esc(MANEUVERS[th.man].replace(/ \(.*\)/, ''))}</dd>` : ''}
     ${th && r.assess ? `<dt>Track value</dt><dd>${valueHtml(r)}</dd><dt>Predicted impact</dt><dd>${ippText(th, r)}</dd>` : ''}
     <dt>SVs in view</dt><dd><b>${r.vis.length}</b> ${layerMix(r.vis)}</dd>
     <dt>Custody pick <span class="src-tag">${pickTag}</span></dt><dd class="best"><b>${bs ? bs.id : esc(r.pickId || '—')}</b>${bs ? ` · ${LAYER_NAME[bs.layer]}` : ''} ${bandHtml(r.bandP)}${r.best !== -1 && !r.pickInView ? ' <span class="warn">not in view</span>' : ''}</dd>
@@ -122,6 +128,7 @@ function focusHtml(k: number): string {
   if (r.why && r.picked === 'sim' && isT) html += whyHtml(r, st);
   else if (r.picked === 'file' && r.reason) html += `<div class="why"><div class="why-h">CS2C rationale</div><p class="why-text">${esc(r.reason)}</p></div>`;
   else html += `<div class="qbar" title="Geometry score of the custody pick"><i style="width:${B ? Math.round(B.q * 100) : 0}%"></i></div>`;
+  if (isT) html += defenseHtml(f.i);
   if (isT && r.best >= 0) html += `<button class="kill" data-kill="${r.best}" title="Simulate a failure of this SV from now on and watch CS2C retask">Knock out ${sim.sats[r.best].id}</button>`;
   return html;
 }
@@ -153,7 +160,7 @@ export function updateUI(k: number, scrubbing: boolean): void {
   $('#outN').textContent = sim.outages.length ? `${sim.outages.length} SV${sim.outages.length > 1 ? 's' : ''} knocked out (${sim.outages.map(o => sim.sats[o.s] ? sim.sats[o.s].id : '?').join(', ')})` : '';
 
   // collapsed-section summaries
-  const act = sim.thrRec.map(r => r[k]).filter((r): r is StepRec => !!r), c = [0, 0, 0];
+  const act = sim.thrRec.map((r, j) => isDestroyed(j, S.t) ? null : r[k]).filter((r): r is StepRec => !!r), c = [0, 0, 0];
   act.forEach(r => c[r.status]++);
   $('#threatsSum').textContent = $<HTMLDetailsElement>('#foldThreats').open ? 'custody over flight' : (act.length ? `${act.length} airborne · ${c[2]} stereo · ${c[1]} mono · ${c[0]} gap` : `${sim.threats.length} queued`);
   $('#sitesSum').textContent = $<HTMLDetailsElement>('#foldSites').open ? 'SVs in view · best SV' : `${sim.sites.length} sites watched`;
@@ -167,7 +174,8 @@ export function updateUI(k: number, scrubbing: boolean): void {
   });
   sim.threats.forEach((th, j) => {
     const rr = sim.thrRec[j][k], el = document.getElementById('thr-' + j); if (!el) return;
-    const st = threatState(th, S.t);
+    const dead = isDestroyed(j, S.t), st = dead ? null : threatState(th, S.t);
+    if (dead) { el.querySelector('.rt')!.innerHTML = `${th.siteName} → ${dest(th, rr)} <small>destroyed</small>`; el.querySelector('.st')!.innerHTML = '<span class="pill sk">Destroyed</span>'; el.setAttribute('aria-pressed', String(!!f && f.kind === 'threat' && f.i === j)); return; }
     el.querySelector('.rt')!.innerHTML = `${th.siteName} → ${dest(th, rr)} <small>${st ? PHASE_LABEL[st.phase] + ' · ' + (rr ? rr.vis.length : 0) + ' SVs' : S.t < th.tL ? 'T+' + fmtT(th.tL) : 'impact'}</small>`;
     el.querySelector('.st')!.innerHTML = (st && rr && rr.assess ? prioHtml(rr) + ' ' : '') + (st && rr && rr.bandP ? bandHtml(rr.bandP) + ' ' : '') + pill(rr, th);
     el.setAttribute('aria-pressed', String(!!f && f.kind === 'threat' && f.i === j));
@@ -185,6 +193,13 @@ export function buildLists(onFocus: (f: NonNullable<Focus>) => void): void {
 /** Architecture note and per-layer SV counts in the Sensor architecture section. */
 export function updateArchPanel(): void {
   $('#archNote').innerHTML = ARCH[S.arch].note;
+  const real = !!ARCH[S.arch].real;
+  $('#archSrc').hidden = $('#archRefresh').hidden = !real;
+  if (real) {
+    const ages = sim.sats.filter(s => s.kind === 'r' && !s.notional).map(s => (S.epoch - (s as { epoch: number }).epoch) / 864e5);
+    const oldest = ages.length ? Math.max(...ages) : 0;
+    $('#archSrc').innerHTML = `Elements: ${esc(catalogSrc.text)}${ages.length ? ` · oldest ${oldest < 1 ? Math.round(oldest * 24) + ' h' : Math.round(oldest) + ' d'}` : ''}<br>T+00:00 = ${new Date(S.epoch).toISOString().slice(0, 16).replace('T', ' ')} UTC (page load)`;
+  }
   (Object.keys(S.layers) as (keyof typeof S.layers)[]).forEach(l => {
     const sm = document.querySelector(`#ly-${l}~small`);
     if (sm) sm.textContent = S.layers[l] ? `${sim.sats.filter(s => s.group === l).length} SVs` : 'off';
@@ -199,6 +214,7 @@ export function refreshSummary(): void {
     (MODEL.src === 'sim' || (MODEL.src === 'file' && MODEL.file) ? ` · same primary as baseline ${Math.round(sm.agree * 100)}% of the time · IR band fit ${Math.round(sm.fit * 100)}% vs ${Math.round(sm.fit0 * 100)}% on fixed default bands${sm.tasked ? ` · shared fields of view: avg ${sm.tasked.toFixed(1)} SVs tasked for ${sm.slots.toFixed(1)} custody slots` : ''}` : '')
     + (sm.deprioritized ? ` · ${sm.deprioritized} RV deprioritized (impact clear of defended areas)${MODEL.src === 'sim' ? `, freeing ~${Math.round(sm.svMinFreed)} SV-minutes` : ''}` : '');
   if (MODEL.src === 'file') $('#fileStatus').innerHTML = fileStatusText();
+  refreshDefensePanel();
   lastUI = 0; drawChart();
 }
 

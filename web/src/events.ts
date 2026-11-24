@@ -4,6 +4,8 @@ import { S, sim } from './state';
 import { isOut } from './tasking';
 import { hgvLatRate } from './threats';
 import { fmtN } from './format';
+import { SYS } from './systems';
+import { mergeDefense } from './mda';
 import type { Assessment, Band, Phase, Priority, StepRec, Threat } from './types';
 
 const PHASE_EVT: Partial<Record<Phase, string>> = {
@@ -32,19 +34,23 @@ export function buildEvents(): void {
       if (!r) { if (prev) { events.push({ t, j, kind: 'impact', text: th.errant ? `Impact in open ocean (${th.impactName})` : `Impact near ${th.target}` }); prev = null; } return; }
       const tasking = () => r.best >= 0 ? `${id(r.best)}${bandTxt(r.bandP)}${r.partner >= 0 ? ` + ${id(r.partner)}${bandTxt(r.bandQ)}` : r.assess && r.assess.priority === 'Low' ? ' (monitor)' : ' (mono)'}` : 'no SV available';
       if (!prev) {
-        events.push({ t, j, kind: 'launch', text: `Launch detected from ${th.siteName} · ${r.vis.length} SVs in view` });
+        events.push({ t, j, kind: 'launch', text: `${th.sys ? SYS[th.sys].m.launchTxt + ' · ' : 'Launch detected from '}${th.sys ? 'from ' : ''}${th.siteName} · ${r.vis.length} SVs in view` });
         events.push({ t: t + 0.1, j, kind: 'task', sv: r.best, text: `CS2C tasks ${tasking()}` });
         prev = snap(r); return;
       }
       let cause: string | null = null;
       const phaseText = PHASE_EVT[r.phase];
-      if (r.phase !== prev.phase && phaseText) { events.push({ t, j, kind: 'phase', text: phaseText }); cause = 'phase change'; }
+      if (th.flight) {
+        // named systems narrate their own profile (burnout, glide, scripted maneuver, dive)
+        th.flight.ev.forEach(e => { const te = th.tL + e.t; if (te > t - DT && te <= t) { events.push({ t: te, j, kind: e.kind, text: e.txt }); if (e.kind === 'maneuver') lastMan = t; } });
+        if (r.phase !== prev.phase) cause = 'phase change';
+      } else if (r.phase !== prev.phase && phaseText) { events.push({ t, j, kind: 'phase', text: phaseText }); cause = 'phase change'; }
       if (r.assess && prev.prio && r.assess.priority !== prev.prio) {
         events.push({ t, j, kind: 'priority', text: priorityText(th, r.assess) });
         cause = r.assess.priority === 'Low' ? 'deprioritized, impact clear of defended areas' : 'priority raised';
       }
       const lr0 = hgvLatRate(th, t - DT), lr1 = hgvLatRate(th, t);
-      if (lr0 && lr1 && Math.sign(lr0) !== Math.sign(lr1) && t - lastMan > 60) { events.push({ t, j, kind: 'maneuver', text: 'Cross-range maneuver detected' }); lastMan = t; }
+      if (!th.flight && lr0 && lr1 && Math.sign(lr0) !== Math.sign(lr1) && t - lastMan > 60) { events.push({ t, j, kind: 'maneuver', text: 'Cross-range maneuver detected' }); lastMan = t; }
       // a swap of primary and partner roles is not a retask
       const setNow = [r.best, r.partner].sort().join(), setPrev = [prev.best, prev.partner].sort().join();
       const bandsNow = [r.best + ':' + r.bandP, r.partner + ':' + r.bandQ].sort().join(), bandsPrev = [prev.best + ':' + prev.bandP, prev.partner + ':' + prev.bandQ].sort().join();
@@ -63,7 +69,8 @@ export function buildEvents(): void {
       prev = snap(r);
     });
   });
-  events.sort((a, b) => a.t - b.t);
+  // missile defense: tracks, fire-control solutions, shots and intercepts; custody events end at the kill
+  sim.events = mergeDefense(events);
 }
 
 /** Queue globe pulses for events crossed during forward playback (focused threat and launches only). */

@@ -1,6 +1,8 @@
 // Threat assessment: predicted impact point (IPP) with shrinking uncertainty, and a tasking priority.
 // Notional: the uncertainty model stands in for a real IPP estimator fed by the tracks.
-import { DEFENDED_RADIUS_KM, LOCATION_CLASS, LOCATION_WEIGHT, MEDIUM_MARGIN_KM, REACH_FACTOR, REGIONS, TYPE_WEIGHT } from './config';
+import { DEFENDED_RADIUS_KM, LOCATION_CLASS, LOCATION_WEIGHT, MEDIUM_MARGIN_KM, REACH_FACTOR, TYPE_WEIGHT } from './config';
+import { SYS } from './systems';
+import { defendedAreas } from './threats';
 import { D2R, DT, RE } from './constants';
 import { S, sim } from './state';
 import type { Assessment, Priority, Threat } from './types';
@@ -21,7 +23,7 @@ function uncertaintyKm(th: Threat, t: number, phase: string): { radius: number; 
 }
 
 export function assessThreats(): void {
-  const defended = REGIONS[S.region].targets;
+  const defended = defendedAreas();
   sim.threats.forEach((th, j) => {
     const [tLat, tLon] = toLL([th.b[0] * RE, th.b[1] * RE, th.b[2] * RE]);
     const phase0 = (hash(th.id + S.region) / 4294967296) * Math.PI * 2;
@@ -40,7 +42,7 @@ export function assessThreats(): void {
       if (prev === 'Low' && priority === 'Medium') priority = 'Low'; // hysteresis: once cleared, stay cleared unless it could hit
       prev = priority;
       // track value V(q): type weight x location weight; an RV clear of every defended area is valued as an open-ocean event
-      const typeClass = th.type === 'H' ? 'HGV' : th.D > 5500 ? 'ICBM' : 'ballistic missile';
+      const typeClass = th.sys ? SYS[th.sys].name : th.type === 'H' ? 'HGV' : th.D > 5500 ? 'ICBM' : 'ballistic missile';
       const typeWeight = th.type === 'H' ? TYPE_WEIGHT.hgv : th.D > 5500 ? TYPE_WEIGHT.icbm : TYPE_WEIGHT.ballistic;
       const cls = LOCATION_CLASS[nearest] || 'Allied';
       const locClass = priority === 'Low' ? 'open ocean' : cls;

@@ -6,6 +6,10 @@ export const S = {
   region: 'nk', salvo: 10, mix: 'mixed', arch: 't2',
   layers: { LEO: true, MEO: true, GEO: true, HEO: true } as Record<Group, boolean>,
   rings: true, allLos: false, loop: true, errant: true,
+  /** Threat system for HGV threats ('generic' = the built-in glide model) and maneuver ('auto' = the system's default). */
+  sys: 'generic', man: 'auto',
+  /** Day/night terminator; the scenario starts at page-load UTC. */
+  sun: true, epoch: Date.now(),
   t: 0, playing: !matchMedia('(prefers-reduced-motion: reduce)').matches, speed: 30,
   focus: { kind: 'site', i: 0 } as Focus, autoFocus: true, follow: true,
   cam: {

@@ -1,4 +1,6 @@
 // Shared types for the CS2C Custody Visualizer.
+import type { Maneuver, SysFlight } from './systems';
+import type { SatRec } from '../node_modules/satellite.js/dist/propagation/SatRec.js';
 
 export type Vec3 = [number, number, number];
 export type Quat = [number, number, number, number];
@@ -18,7 +20,9 @@ interface SatBase { id: string; group: Group; layer: Layer; idx: number; a: numb
 export interface CircSat extends SatBase { kind: 'c'; n: number; ci: number; si: number; raan: number; m0: number; plane: number; ring: string }
 export interface GeoSat extends SatBase { kind: 'g'; lon: number }
 export interface EllSat extends SatBase { kind: 'e'; e: number; n: number; ci: number; si: number; raan: number; w: number; m0: number }
-export type Sat = CircSat | GeoSat | EllSat;
+/** Real satellite propagated with SGP4 from public elements ("Today" architecture). */
+export interface RealSat extends SatBase { kind: 'r'; rec: SatRec; name: string; norad: string; epoch: number; notional: boolean; note: string; period: number }
+export type Sat = CircSat | GeoSat | EllSat | RealSat;
 
 export interface Site { name: string; lat: number; lon: number; p: Vec3 }
 
@@ -32,6 +36,8 @@ export interface Threat {
   errant: boolean;
   /** True impact point name: the aimpoint, or the ocean area for an errant RV. */
   impactName: string;
+  /** Named threat system (HGV threats only; null = generic glide model), its maneuver and precomputed flight. */
+  sys: string | null; man: Maneuver | null; flight: SysFlight | null;
 }
 export interface ThreatState { p: Vec3; h: number; phase: Phase }
 
@@ -87,7 +93,8 @@ export interface Summary {
   valueStereo: number;
 }
 
-export type EventKind = 'launch' | 'task' | 'phase' | 'maneuver' | 'priority' | 'retask' | 'retask-out' | 'gap' | 'regain' | 'impact';
+export type EventKind = 'launch' | 'task' | 'phase' | 'maneuver' | 'priority' | 'retask' | 'retask-out' | 'gap' | 'regain' | 'impact'
+  /* missile-defense layer */ | 'track' | 'c2' | 'shoot' | 'kill' | 'miss' | 'leak';
 export interface SimEvent { t: number; j: number; kind: EventKind; text: string; sv?: number }
 export interface Outage { s: number; t: number }
 export interface Pulse { kind: EventKind | 'sv' | 'out'; s?: number; j?: number; start: number }

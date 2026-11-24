@@ -12,6 +12,7 @@ img{max-width:100%}
   --ok:#2E8A57; --warn:#D9A21B; --bad:#C2391F;
   --swir:#1F8FA6; --mwir:#D2691E; --lwir:#A8327A;
   --shadow:0 1px 2px rgba(20,24,28,.06),0 6px 24px rgba(20,24,28,.07);
+  --mda-gbi:#C46A0C; --mda-sm3:#127C93; --mda-thaad:#3F8A34; --mda-pac3:#8C8A12; --mda-sm6:#118E74; --mda-gpi:#A33BB8; --mda-radar:#6A49B8; --mda-c2:#A87A0A; --sun:#C98A00;
   --bh:22px; --u-green:#007A33; --u-ink:#FFFFFF;
   --f-display:"Archivo",system-ui,-apple-system,"Segoe UI",sans-serif;
   --f-body:"Archivo",system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -23,6 +24,7 @@ img{max-width:100%}
   --gold:#F2C24A; --gold-ink:#F2C24A; --blue:#72A9EA; --bal:#F26A4F; --hgv:#B98CF2; --plume:#FF9A45;
   --ok:#4CC48B; --warn:#F2C24A; --bad:#F26A4F;
   --swir:#4CC3DA; --mwir:#F29A4A; --lwir:#E27BBE;
+  --mda-gbi:#FF9F43; --mda-sm3:#4FD1E8; --mda-thaad:#8BD17C; --mda-pac3:#E2E36B; --mda-sm6:#3DDBB4; --mda-gpi:#E879F9; --mda-radar:#B58CFF; --mda-c2:#F2C24A; --sun:#FFD45E;
   --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 28px rgba(0,0,0,.35); color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0D1012; --panel:#161A1D; --panel-2:#1B2023; --ink:#E7EAEB; --muted:#9AA3A9; --line:#2B3236;
@@ -30,6 +32,7 @@ img{max-width:100%}
   --gold:#F2C24A; --gold-ink:#F2C24A; --blue:#72A9EA; --bal:#F26A4F; --hgv:#B98CF2; --plume:#FF9A45;
   --ok:#4CC48B; --warn:#F2C24A; --bad:#F26A4F;
   --swir:#4CC3DA; --mwir:#F29A4A; --lwir:#E27BBE;
+  --mda-gbi:#FF9F43; --mda-sm3:#4FD1E8; --mda-thaad:#8BD17C; --mda-pac3:#E2E36B; --mda-sm6:#3DDBB4; --mda-gpi:#E879F9; --mda-radar:#B58CFF; --mda-c2:#F2C24A; --sun:#FFD45E;
   --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 28px rgba(0,0,0,.35); color-scheme:dark}
 html,body{height:100%}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:13px;line-height:1.4;overflow:hidden}
@@ -210,3 +213,36 @@ details.sec:not([open]){gap:0}
   .tools{bottom:10px;right:10px}
 }
 @media (prefers-reduced-motion: reduce){*{scroll-behavior:auto!important}}
+
+/* selects, threat-system card */
+.msel{width:100%;font:12px var(--f-body);color:var(--ink);background:var(--panel-2);border:1px solid var(--line);border-radius:7px;padding:5px 7px}
+.sysdl{margin-top:6px;font-size:11px}
+.sysdl dd{white-space:normal;font-family:var(--f-body)}
+
+/* missile defense */
+.mtip{position:fixed;z-index:30;max-width:320px;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);padding:7px 9px;font-size:11.5px;line-height:1.45;pointer-events:none}
+.mtip .mut,.mut{color:var(--muted)}.mtip .warn{color:var(--bad)}
+body.placing #globe{cursor:crosshair}
+.mda-sum{margin:0;font-size:11.5px;line-height:1.45}
+.mda-sum .warn,.mtab .warn,.def .warn{color:var(--bad)}.mtab .ok,.def .ok{color:var(--ok)}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chips button{display:flex;align-items:center;gap:5px;font-size:11px;border:1px solid var(--line);background:var(--panel-2);border-radius:999px;padding:2px 8px;cursor:pointer}
+.chips button i{width:8px;height:8px;border-radius:50%;display:inline-block}
+.chips button[aria-pressed="false"]{opacity:.45}
+.docgrid{display:grid;grid-template-columns:auto 1fr;gap:4px 8px;align-items:center;font-size:11.5px}
+.docgrid .seg button{padding:3px 4px;font-size:11px}
+.mtab{width:100%;border-collapse:collapse;font-family:var(--f-mono);font-size:10.5px}
+.mtab th{font-weight:500;color:var(--muted);text-align:left;border-bottom:1px solid var(--line);padding:2px 3px}
+.mtab td{border-bottom:1px solid var(--line);padding:3px 2px;white-space:nowrap}
+.mtab{table-layout:auto}.mtab td:nth-child(4){text-align:center}
+.mtab tr[data-j]{cursor:pointer}.mtab tr[data-j]:hover td{background:var(--panel-2)}
+.mtab .chip{font-size:9.5px;padding:1px 4px}
+.mships{margin:0;padding-left:16px;font-size:11px;display:flex;flex-direction:column;gap:2px}
+.btnrow{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.btnrow button{font-size:11px;border:1px solid var(--line);background:var(--panel);border-radius:5px;padding:3px 8px;cursor:pointer}
+.btnrow button[aria-pressed="true"]{border-color:var(--gold);color:var(--gold-ink)}
+.btnrow input{width:64px}
+.def .kv{font-size:11.5px}
+.pill.sk{color:var(--ok);border-color:var(--ok);background:color-mix(in srgb,var(--ok) 10%,transparent)}
+.ev-track{border-left-color:var(--mda-radar)}.ev-c2{border-left-color:var(--mda-c2)}.ev-shoot{border-left-color:var(--mda-sm3)}
+.ev-kill{border-left-color:var(--ok)}.ev-miss{border-left-color:var(--muted)}.ev-leak{border-left-color:var(--bad)}
