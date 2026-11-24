@@ -43,7 +43,7 @@ const round = (km: number, to: number) => fmtN(Math.round(km / to) * to);
 function ippText(th: Threat, r: StepRec): string {
   const a = r.assess!;
   if (!a.reliable) return th.type === 'H' && r.phase !== 'boost' ? 'maneuvering, IPP not reliable' : 'boosting, IPP not yet reliable';
-  return `~${round(a.nearestKm, 100)} km from ${a.nearest} ±${round(a.radiusKm, 10)} km`;
+  return `~${round(a.nearestKm, 100)} km from ${a.nearest} ±${round(a.alongKm, 10)} km downrange × ±${round(a.crossKm, 10)} km cross-range`;
 }
 const bandHtml = (b: Band | null) => b ? `<span class="band ${b}">${b}</span>` : '<span class="band none">—</span>';
 function layerMix(vis: Vis[]): string {

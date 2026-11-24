@@ -39,7 +39,7 @@ class Target:
     alt_km: float
     candidates: List[Candidate] = field(default_factory=list)
     #: Visualizer's notional IPP assessment (threats only): priority High/Medium/Low, ipp_lat, ipp_lon,
-    #: radius_km, nearest_defended, distance_km, reliable. CS2C may use it or apply its own prioritization.
+    #: radius_km, along_km, cross_km, heading_deg (uncertainty ellipse), nearest_defended, distance_km, reliable. CS2C may use it or apply its own prioritization.
     assessment: Optional[Dict[str, Any]] = None
 
     @property
